@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه تحلیل پیشرفته TSETMC</title>
+    <!-- Fonts & Icons -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #22c55e;
+            --danger-color: #ef4444;
+            --bg-light: #f1f5f9;
+            --sidebar-bg: #ffffff;
+            --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        [data-theme="dark"] {
+            --bg-light: #0f172a;
+            --sidebar-bg: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+        }
+
+        body { 
+            background-color: var(--bg-light); 
+            font-family: 'Vazirmatn', Tahoma, sans-serif;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        /* Sidebar Styling */
+        .sidebar { 
+            background: var(--sidebar-bg); 
+            min-height: 100vh; 
+            padding: 0;
+            border-left: 1px solid var(--border-color); 
+            box-shadow: 4px 0 24px rgba(0,0,0,0.02);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        .sidebar-header {
+            padding: 2rem 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sidebar-header h4 { font-weight: 800; margin: 0; font-size: 1.25rem; }
+        
+        #theme-toggle {
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            transition: all 0.2s;
+        }
+        #theme-toggle:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+
+        .sidebar-content { padding: 0 1rem 2rem 1rem; }
+
+        .nav-link { 
+            color: var(--text-secondary); 
+            padding: 0.75rem 1rem; 
+            border-radius: 12px; 
+            margin-bottom: 4px; 
+            cursor: pointer; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+        }
+        .nav-link i { width: 20px; text-align: center; font-size: 1.1rem; }
+        .nav-link:hover { background-color: var(--bg-light); color: var(--primary-color); transform: translateX(-4px); }
+        .nav-link.active { background-color: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+        .nav-link.disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .section-title { 
+            font-size: 0.75rem; 
+            font-weight: 700; 
+            color: var(--text-secondary); 
+            margin: 1.5rem 1rem 0.75rem 1rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em;
+        }
+
+        /* Main Content */
+        .main-content { padding: 2rem; }
+        
+        .card { 
+            border-radius: 20px; 
+            box-shadow: var(--card-shadow); 
+            border: 1px solid var(--border-color); 
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .filter-card { margin-bottom: 2rem; }
+
+        .form-label { font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .form-control, .form-select {
+            background-color: var(--sidebar-bg);
+            color: var(--text-primary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 1rem;
+            transition: all 0.2s;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: var(--sidebar-bg);
+            color: var(--text-primary);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Table Styling */
+        .table-container { 
+            background: var(--sidebar-bg); 
+            padding: 1.5rem; 
+            border-radius: 24px; 
+            box-shadow: var(--card-shadow);
+            max-height: 700px;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+        }
+        
+        .table { margin-bottom: 0; vertical-align: middle; color: var(--text-primary); }
+        .table thead th {
+            background: var(--bg-light);
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.025em;
+            padding: 1rem;
+            border-bottom: 2px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .table tbody td { padding: 1rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+        .table-striped tbody tr:nth-of-type(odd) { background-color: var(--bg-light); }
+        .table-hover tbody tr:hover { background-color: var(--border-color); }
+
+        /* Status Colors */
+        .text-up { color: var(--success-color) !important; font-weight: 700; }
+        .text-down { color: var(--danger-color) !important; font-weight: 700; }
+        
+        /* Signal Colors */
+        .signal-bullish { color: var(--success-color); font-weight: bold; }
+        .signal-bearish { color: var(--danger-color); font-weight: bold; }
+        .signal-oversold { color: #3b82f6; font-weight: bold; }
+        .signal-overbought { color: #f59e0b; font-weight: bold; }
+
+        /* Watchlist Styling */
+        .watchlist-item {
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .watchlist-item:hover { background: var(--primary-color); color: white; }
+        .watchlist-item .remove-item { cursor: pointer; opacity: 0.6; }
+        .watchlist-item .remove-item:hover { opacity: 1; color: #ff4d4d; }
+
+        .badge-up { background-color: #dcfce7; color: #166534; }
+        .badge-down { background-color: #fee2e2; color: #991b1b; }
+
+        /* Buttons */
+        .btn-primary { 
+            background-color: var(--primary-color); 
+            border: none; 
+            border-radius: 12px; 
+            padding: 0.75rem 1.5rem; 
+            font-weight: 700;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+            transition: all 0.3s;
+        }
+        .btn-primary:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+        
+        .btn-download { 
+            border-radius: 10px; 
+            font-weight: 600; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 8px;
+            padding: 0.5rem 1rem;
+        }
+
+        /* Loading Animation */
+        #loading { padding: 4rem 0; display: none; }
+        .spinner-modern {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .sidebar { min-height: auto; border-left: none; border-bottom: 1px solid #e2e8f0; }
+            .main-content { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Hidden container for chart rendering during export -->
+        <div id="export_charts_container" style="position: absolute; left: -9999px; top: -9999px; width: 1200px;">
+            <div id="chart_candle_export"></div>
+            <div id="chart_trend_export"></div>
+            <div id="chart_mom_export"></div>
+            <div id="chart_vol_export"></div>
+        </div>
+
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <div class="sidebar-header">
+                    <h4><i class="fa-solid fa-chart-line me-2"></i> تحلیل TSETMC</h4>
+                    <div id="theme-toggle" title="تغییر تم">
+                        <i class="fa-solid fa-moon"></i>
+                    </div>
+                </div>
+                
+                <div class="sidebar-content">
+                    <div class="section-title">بازار هدف</div>
+                    <div class="px-2">
+                        <select id="asset_type" class="form-select mb-3">
+                            <option value="">انتخاب بازار...</option>
+                            <optgroup label="بازارهای اصلی">
+                                <option value="1">بورس تهران</option>
+                                <option value="2">فرابورس ایران</option>
+                                <option value="5">صندوق‌های ETF</option>
+                                <option value="fixed_income">درآمد ثابت</option>
+                            </optgroup>
+                            <optgroup label="سایر">
+                                <option value="3">بورس کالا و آتی</option>
+                                <option value="tashilat">تسهیلات مسکن</option>
+                            </optgroup>
+                            <optgroup label="شاخص‌ها">
+                                <option value="indices_market">شاخص‌های کل</option>
+                                <option value="indices_industry">شاخص‌های صنایع</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="section-title">سرویس‌های تحلیلی</div>
+                    <div id="service_list" class="nav flex-column px-2">
+                        <div class="nav-link active" data-value="realtime" data-desc="اطلاعات کامل لحظه‌ای شامل قیمت، حجم، ارزش معاملات و P/E">
+                            <i class="fa-solid fa-bolt"></i> اطلاعات لحظه‌ای
+                        </div>
+                        <div class="nav-link" data-value="technical" data-desc="تحلیل تکنیکال جامع (۱۸ اندیکاتور در ۳ بعد روند، شتاب و نوسان)">
+                            <i class="fa-solid fa-microchip"></i> تحلیل تکنیکال
+                        </div>
+                        <div class="nav-link" data-value="history" data-desc="داده‌های OHLCV تاریخی روزانه نماد">
+                            <i class="fa-solid fa-calendar-days"></i> تاریخچه قیمت
+                        </div>
+                        <div class="nav-link" data-value="client_type" data-desc="تاریخچه حجم خرید و فروش معامله‌گران حقیقی و حقوقی">
+                            <i class="fa-solid fa-users-between-lines"></i> حقیقی-حقوقی
+                        </div>
+                        <div class="nav-link" data-value="candlestick" data-desc="داده‌های کندل‌استیک درون‌روزی (Intraday)">
+                            <i class="fa-solid fa-chart-candlestick"></i> کندل‌استیک
+                        </div>
+                        <div class="nav-link" data-value="transactions" data-desc="لیست کامل ریزمعاملات انجام شده در روز جاری">
+                            <i class="fa-solid fa-list-check"></i> ریزمعاملات
+                        </div>
+                        <div class="nav-link" data-value="shareholders" data-desc="لیست سهامداران عمده و درصد مالکیت آن‌ها">
+                            <i class="fa-solid fa-building-columns"></i> سهامداران
+                        </div>
+                        <div class="nav-link" data-value="nav" data-desc="ارزش خالص دارایی‌های صندوق‌های ETF">
+                            <i class="fa-solid fa-vault"></i> NAV صندوق
+                        </div>
+                        <div class="nav-link" data-value="codal" data-desc="اطلاعیه‌ها و گزارش‌های منتشر شده در سامانه کدال">
+                            <i class="fa-solid fa-file-contract"></i> اطلاعیه‌های کدال
+                        </div>
+                        <div class="nav-link" data-value="heatmap" data-desc="نقشه حرارتی بازار بر اساس ارزش معاملات و تغییرات قیمت">
+                            <i class="fa-solid fa-border-all"></i> نقشه بازار (Heatmap)
+                        </div>
+                    </div>
+
+                    <div class="section-title">دیده‌بان من</div>
+                    <div id="watchlist_container" class="px-2">
+                        <div id="watchlist_items" class="d-flex flex-wrap gap-1 mb-2">
+                            <!-- Watchlist items will be added here -->
+                        </div>
+                        <button id="btn_add_watchlist" class="btn btn-sm btn-outline-primary w-100 rounded-pill mb-2">
+                            <i class="fa-solid fa-plus me-1"></i> افزودن به دیده‌بان
+                        </button>
+                    </div>
+
+                    <div class="section-title">هشدارهای قیمت</div>
+                    <div id="alerts_container" class="px-2">
+                        <div id="alert_items" class="mb-2"></div>
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="number" id="alert_price" class="form-control" placeholder="قیمت هدف...">
+                            <button id="btn_add_alert" class="btn btn-primary">ثبت</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-3 bg-light rounded-4 small text-muted border">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        <span id="service_desc"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <!-- Header Info -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2 class="fw-bold mb-1">داشبورد تحلیل بازار</h2>
+                        <p class="text-muted mb-0">دسترسی هوشمند به داده‌های بورس اوراق بهادار تهران</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="market_status_badge" class="badge bg-success-soft text-success px-3 py-2 rounded-pill border border-success">
+                            <i class="fa-solid fa-circle fa-fade me-1"></i> بازار: در حال فعالیت
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold" id="current_time">--:--:--</div>
+                            <div class="small text-muted">امروز</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters Card -->
+                <div class="card filter-card p-4">
+                    <div class="row g-4 align-items-end">
+                        <div class="col-lg-4">
+                            <label class="form-label"><i class="fa-solid fa-magnifying-glass me-1"></i> جستجوی نماد</label>
+                            <div class="input-group">
+                                <input type="text" id="symbol_search" class="form-control" placeholder="نام نماد (مثلاً: فولاد)..." disabled>
+                                <button id="btn_refresh_symbols" class="btn btn-outline-primary" type="button"><i class="fa-solid fa-rotate"></i></button>
+                            </div>
+                            <select id="symbol" class="form-select mt-2" disabled>
+                                <option value="">ابتدا بازار را انتخاب کنید</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-4">
+                            <label class="form-label"><i class="fa-solid fa-calendar me-1"></i> بازه زمانی (شمسی)</label>
+                            <div class="input-group">
+                                <input type="text" id="start_date" class="form-control text-center" placeholder="از تاریخ" data-jdp>
+                                <span class="input-group-text bg-white border-start-0 border-end-0"><i class="fa-solid fa-arrow-left-long"></i></span>
+                                <input type="text" id="end_date" class="form-control text-center" placeholder="تا تاریخ" data-jdp>
+                            </div>
+                        </div>
+                        <div id="codal_category_container" class="col-lg-2" style="display: none;">
+                            <label class="form-label">دسته‌بندی کدال</label>
+                            <select id="codal_category" class="form-select">
+                                <option value="">همه موارد</option>
+                                <option value="1">صورت‌های مالی</option>
+                                <option value="2">افشای اطلاعات بااهمیت</option>
+                                <option value="3">گزارش فعالیت ماهانه</option>
+                                <option value="4">اساسنامه و امیدنامه</option>
+                                <option value="5">هیئت مدیره و کمیته حسابرسی</option>
+                                <option value="6">آگهی دعوت به مجمع</option>
+                                <option value="7">تصمیمات مجمع</option>
+                                <option value="8">افزایش سرمایه</option>
+                                <option value="9">شفاف‌سازی</option>
+                                <option value="10">سایر اطلاعیه‌ها</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="adjusted_prices" checked>
+                                <label class="form-check-label fw-bold" for="adjusted_prices">تعدیل قیمت</label>
+                            </div>
+                            <button id="btn_fetch" class="btn btn-primary w-100">
+                                <i class="fa-solid fa-download me-2"></i> دریافت داده
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading" class="text-center">
+                    <div class="spinner-modern"></div>
+                    <h5 class="fw-bold text-primary">در حال پردازش درخواست...</h5>
+                    <p class="text-muted">لطفاً شکیبا باشید، داده‌ها در حال دریافت از سرور هستند.</p>
+                </div>
+
+                <!-- Results Section -->
+                <div id="result_container" style="display: none;">
+                    <!-- Heatmap Container -->
+                    <div id="heatmap_container" class="card p-4 mb-4" style="display: none;">
+                        <h4 class="fw-bold mb-3 text-primary">نقشه حرارتی بازار</h4>
+                        <div id="market_heatmap" style="min-height: 600px;"></div>
+                    </div>
+
+                    <div class="card p-0 overflow-hidden">
+                        <div class="d-flex justify-content-between align-items-center p-4 bg-white border-bottom">
+                            <h4 id="result_title" class="fw-bold mb-0 text-primary">نتایج تحلیل</h4>
+                            <div class="d-flex gap-2">
+                                <button id="btn_copy" class="btn btn-outline-secondary btn-download">
+                                    <i class="fa-solid fa-copy"></i> کپی
+                                </button>
+                                <button id="btn_package" class="btn btn-primary btn-download">
+                                    <i class="fa-solid fa-file-zipper"></i> دانلود پکیج کامل (دیتا + نمودار)
+                                </button>
+                                <button id="btn_excel" class="btn btn-success btn-download">
+                                    <i class="fa-solid fa-file-excel"></i> Excel
+                                </button>
+                                <button id="btn_csv" class="btn btn-info btn-download text-white">
+                                    <i class="fa-solid fa-file-csv"></i> CSV
+                                </button>
+                                <button id="btn_pdf" class="btn btn-danger btn-download">
+                                    <i class="fa-solid fa-file-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="data_table" class="table table-striped table-hover">
+                                <thead id="table_head"></thead>
+                                <tbody id="table_body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+    <!-- Export Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+        // Initialize Jalali Datepicker
+        const watchlistItems = document.getElementById('watchlist_items');
+        const btnAddWatchlist = document.getElementById('btn_add_watchlist');
+        jalaliDatepicker.startWatch({
+            separatorChar: "-",
+            minDate: "attr",
+            maxDate: "attr"
+        });
+
+        const assetTypeSelect = document.getElementById('asset_type');
+        const symbolSelect = document.getElementById('symbol');
+        const symbolSearch = document.getElementById('symbol_search');
+        const btnRefreshSymbols = document.getElementById('btn_refresh_symbols');
+        const serviceLinks = document.querySelectorAll('#service_list .nav-link');
+        const serviceDesc = document.getElementById('service_desc');
+        const btnFetch = document.getElementById('btn_fetch');
+        const loading = document.getElementById('loading');
+        const resultContainer = document.getElementById('result_container');
+        const tableHead = document.getElementById('table_head');
+        const themeToggle = document.getElementById('theme-toggle');
+
+        // Theme Toggle Logic
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            themeToggle.innerHTML = newTheme === 'dark' ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+            localStorage.setItem('theme', newTheme);
+        });
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        themeToggle.innerHTML = savedTheme === 'dark' ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+
+        // Watchlist Logic
+        // (Consolidated below in the script)
+
+        const tableBody = document.getElementById('table_body');
+        const codalCategoryContainer = document.getElementById('codal_category_container');
+        const codalCategorySelect = document.getElementById('codal_category');
+
+        let currentData = [];
+        let allSymbols = [];
+        let activeService = 'realtime';
+
+        function normalizePersian(text) {
+            if (!text) return "";
+            return text.toString()
+                .replace(/ي/g, "ی")
+                .replace(/ك/g, "ک")
+                .replace(/‌/g, " ")
+                .toLowerCase()
+                .trim();
+        }
+
+        function updateServiceDesc() {
+            const activeLink = document.querySelector('#service_list .nav-link.active');
+            if (activeLink) {
+                serviceDesc.textContent = activeLink.dataset.desc || '';
+                activeService = activeLink.dataset.value;
+                codalCategoryContainer.style.display = (activeService === 'codal') ? 'block' : 'none';
+            }
+        }
+
+        serviceLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                if (link.classList.contains('disabled')) return;
+                serviceLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                updateServiceDesc();
+                
+                // If switching to/from Codal, refresh symbol list to show/hide "All"
+                if (allSymbols.length > 0) {
+                    populateSymbolSelect(allSymbols);
+                }
+
+                if (link.dataset.value === 'technical' && !assetTypeSelect.value) {
+                    alert('لطفاً ابتدا نوع بازار را انتخاب کنید.');
+                }
+            });
+        });
+
+        updateServiceDesc();
+
+        function populateSymbolSelect(symbols) {
+            symbolSelect.innerHTML = '';
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = symbols.length > 0 ? `انتخاب نماد (${symbols.length} مورد)...` : 'نمادی یافت نشد';
+            symbolSelect.appendChild(defaultOpt);
+
+            // Add "All" option for Indices or Codal
+            if (symbols.length > 0 && (assetTypeSelect.value.startsWith('indices') || activeService === 'codal')) {
+                const allOpt = document.createElement('option');
+                allOpt.value = 'all';
+                allOpt.textContent = '--- همه موارد ---';
+                symbolSelect.appendChild(allOpt);
+                
+                // Auto-select "all" for indices
+                if (assetTypeSelect.value.startsWith('indices')) {
+                    allOpt.selected = true;
+                }
+            }
+
+            const fragment = document.createDocumentFragment();
+            symbols.forEach(s => {
+                const opt = document.createElement('option');
+                const val = s.l18 || s.id || s.isin || '';
+                opt.value = val;
+                opt.setAttribute('data-id', s.id || s.isin || val);
+                opt.textContent = `${s.l18 || '---'} (${s.l30 || '---'})`;
+                fragment.appendChild(opt);
+            });
+            symbolSelect.appendChild(fragment);
+            symbolSelect.disabled = false;
+
+            // If search result has only one item, select it automatically
+            if (symbols.length === 1 && symbolSearch.value.trim() !== '') {
+                symbolSelect.selectedIndex = symbolSelect.options.length - 1;
+            }
+        }
+
+        symbolSearch.addEventListener('input', () => {
+            const term = normalizePersian(symbolSearch.value);
+            if (!term) { populateSymbolSelect(allSymbols); return; }
+            const filtered = allSymbols.filter(s => 
+                (s.l18 && normalizePersian(s.l18).includes(term)) || 
+                (s.l30 && normalizePersian(s.l30).includes(term)) ||
+                (s.isin && s.isin.toLowerCase().includes(term)) ||
+                (s.id && s.id.toString().includes(term))
+            );
+            populateSymbolSelect(filtered);
+        });
+
+        symbolSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                if (symbolSelect.value) {
+                    btnFetch.click();
+                }
+            }
+        });
+
+        btnRefreshSymbols.addEventListener('click', () => assetTypeSelect.dispatchEvent(new Event('change')));
+
+        assetTypeSelect.addEventListener('change', async () => {
+            const val = assetTypeSelect.value;
+            if (!val) {
+                symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
+                symbolSelect.disabled = true;
+                return;
+            }
+
+            symbolSelect.innerHTML = '<option value="">در حال بارگذاری نمادها...</option>';
+            symbolSelect.disabled = true;
+            symbolSearch.disabled = true;
+            btnFetch.disabled = true; // Disable fetch while loading symbols
+            symbolSearch.value = '';
+            allSymbols = [];
+
+            if (val.startsWith('indices')) {
+                serviceLinks.forEach(link => {
+                    // Enable Realtime, Technical, and History for indices
+                    const allowed = ['realtime', 'technical', 'history'];
+                    if (!allowed.includes(link.dataset.value)) {
+                        link.classList.add('disabled');
+                    } else {
+                        link.classList.remove('disabled');
+                    }
+                });
+                // If current active is disabled, switch to realtime
+                const activeLink = document.querySelector('#service_list .nav-link.active');
+                if (activeLink && activeLink.classList.contains('disabled')) {
+                    document.querySelector('#service_list .nav-link[data-value="realtime"]').click();
+                }
+            } else {
+                serviceLinks.forEach(link => link.classList.remove('disabled'));
+            }
+            updateServiceDesc();
+
+            try {
+                const response = await fetch(`/api/symbols/${val}`);
+                const symbols = await response.json();
+                if (symbols.error) {
+                    symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
+                } else {
+                    allSymbols = symbols;
+                    populateSymbolSelect(allSymbols);
+                }
+            } catch (e) {
+                symbolSelect.innerHTML = `<option value="">خطا در ارتباط</option>`;
+            } finally {
+                btnFetch.disabled = false; // Re-enable fetch
+                symbolSelect.disabled = false;
+                symbolSearch.disabled = false;
+            }
+        });
+
+        btnFetch.addEventListener('click', async () => {
+            const assetType = assetTypeSelect.value;
+            const symbol = symbolSelect.value;
+            const serviceType = activeService;
+            let startDate = document.getElementById('start_date').value;
+            let endDate = document.getElementById('end_date').value;
+            const adjusted = document.getElementById('adjusted_prices').checked;
+
+            if (startDate) startDate = startDate.replace(/\//g, '-');
+            if (endDate) endDate = endDate.replace(/\//g, '-');
+
+            if (!assetType) {
+                alert('لطفا ابتدا بازار را انتخاب کنید');
+                return;
+            }
+            if (!symbol) {
+                alert('لطفا یک نماد را انتخاب کنید یا جستجو نمایید');
+                return;
+            }
+
+            loading.style.display = 'block';
+            resultContainer.style.display = 'none';
+            btnFetch.disabled = true;
+
+            try {
+                const response = await fetch('/api/fetch_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        asset_type: assetType,
+                        symbol,
+                        service_type: assetType.includes('indices') ? 'realtime' : serviceType,
+                        start_date: startDate,
+                        end_date: endDate,
+                        adjusted: adjusted,
+                        codal_category: codalCategorySelect.value
+                    })
+                });
+                
+                currentData = await response.json();
+                if (currentData.error) {
+                    alert('خطا: ' + currentData.error);
+                } else {
+                    renderTable(currentData);
+                }
+            } catch (e) {
+                alert('خطا در دریافت داده');
+            } finally {
+                loading.style.display = 'none';
+                btnFetch.disabled = false;
+            }
+        });
+
+        function renderTable(data) {
+            if (!data || data.length === 0) { alert('داده‌ای یافت نشد'); return; }
+
+            resultContainer.style.display = 'block';
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            const persianKeys = {
+                'l18': 'نماد', 'l30': 'نام کامل', 'pc': 'پایانی', 'pcc': 'تغییر', 'pcp': 'درصد',
+                'pl': 'آخرین', 'plc': 'تغییر ل.', 'plp': 'درصد ل.', 'pf': 'اولین', 'py': 'دیروز',
+                'pmin': 'کمترین', 'pmax': 'بیشترین', 'tno': 'تعداد', 'tvol': 'حجم', 'tval': 'ارزش',
+                'time': 'زمان/تاریخ', 'date': 'تاریخ', 'eps': 'EPS', 'pe': 'P/E', 'bvol': 'حجم مبنا',
+                'mv': 'ارزش بازار', 'z': 'تعداد سهام', 'isin': 'ISIN', 'cs': 'گروه', 'nav': 'NAV',
+                'count': 'تعداد نماد', 'open': 'بازگشایی', 'high': 'بیشترین', 'low': 'کمترین',
+                'close': 'پایانی', 'volume': 'حجم', 'SMA20': 'SMA20', 'SMA50': 'SMA50',
+                'EMA20': 'EMA20', 'EMA50': 'EMA50', 'MACD': 'MACD', 'MACD_Sig': 'Signal',
+                'ADX': 'ADX', 'RSI': 'RSI', 'STOCHk': 'StochK', 'STOCHd': 'StochD',
+                'WILLR': 'WillR', 'ROC': 'ROC', 'MFI': 'MFI', 'BBU': 'BB Up', 'BBL': 'BB Low',
+                'ATR': 'ATR', 'STDDEV': 'StdDev', 'KC_Upper': 'Keltner', 'DC_Upper': 'Donchian',
+                'title': 'عنوان اطلاعیه', 'code': 'کد', 'date_publish': 'انتشار', 'link': 'لینک',
+                'link_pdf': 'PDF', 'link_excel': 'Excel', 'link_attachment': 'پیوست',
+                'Signal': 'سیگنال', 'Pattern': 'الگو'
+            };
+
+            const keys = Object.keys(data[0]);
+            const trHead = document.createElement('tr');
+            keys.forEach(k => {
+                const th = document.createElement('th');
+                th.textContent = persianKeys[k] || k;
+                trHead.appendChild(th);
+            });
+            tableHead.appendChild(trHead);
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                keys.forEach(k => {
+                    const td = document.createElement('td');
+                    let val = row[k];
+                    
+                    // Color coding for changes
+                    if (['pcp', 'plp', 'pcc', 'plc', 'index_change_percent', 'change_percent'].includes(k)) {
+                        const num = parseFloat(val);
+                        if (num > 0) td.className = 'text-up';
+                        else if (num < 0) td.className = 'text-down';
+                    }
+
+                    // Signal Coloring
+                    if (k === 'Signal' && val) {
+                        if (val.includes('Bullish')) td.className = 'signal-bullish';
+                        else if (val.includes('Bearish')) td.className = 'signal-bearish';
+                        else if (val.includes('Oversold')) td.className = 'signal-oversold';
+                        else if (val.includes('Overbought')) td.className = 'signal-overbought';
+                    }
+
+                    if (k.startsWith('link') && val && val.startsWith('http')) {
+                        td.innerHTML = `<a href="${val}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2">مشاهده</a>`;
+                    } else {
+                        if (typeof val === 'number' && !['eps', 'pe', 'pcp', 'plp'].includes(k)) {
+                            val = val.toLocaleString();
+                        }
+                        td.textContent = val || '---';
+                    }
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+
+            // Check Alerts for the latest price
+            if (data.length > 0 && data[0].l18) {
+                const latest = data[0];
+                checkAlerts(latest.l18, latest.pl || latest.pc);
+            }
+        }
+
+        // --- Watchlist Logic ---
+        let watchlist = JSON.parse(localStorage.getItem('tse_watchlist') || '[]');
+        
+        function addToWatchlist() {
+            const symbol = symbolSelect.value;
+            if (!symbol || watchlist.includes(symbol)) return;
+            watchlist.push(symbol);
+            localStorage.setItem('tse_watchlist', JSON.stringify(watchlist));
+            renderWatchlist();
+        }
+
+        window.removeFromWatchlist = function(symbol) {
+            watchlist = watchlist.filter(s => s !== symbol);
+            localStorage.setItem('tse_watchlist', JSON.stringify(watchlist));
+            renderWatchlist();
+        };
+
+        function renderWatchlist() {
+            const container = document.getElementById('watchlist_items');
+            if (!container) return;
+            container.innerHTML = watchlist.map(s => `
+                <div class="watchlist-item d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                    <span class="pointer" onclick="loadFromWatchlist('${s}')">${s}</span>
+                    <button class="btn btn-sm btn-outline-danger border-0" onclick="removeFromWatchlist('${s}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        window.loadFromWatchlist = function(symbol) {
+            symbolSearch.value = symbol;
+            symbolSearch.dispatchEvent(new Event('input'));
+            setTimeout(() => {
+                for (let i = 0; i < symbolSelect.options.length; i++) {
+                    if (symbolSelect.options[i].value === symbol) {
+                        symbolSelect.selectedIndex = i;
+                        btnFetch.click();
+                        return;
+                    }
+                }
+                if (symbolSelect.options.length > 1) {
+                    symbolSelect.selectedIndex = symbolSelect.options.length - 1;
+                    btnFetch.click();
+                }
+            }, 500);
+        };
+
+        if (btnAddWatchlist) btnAddWatchlist.addEventListener('click', addToWatchlist);
+
+        // --- Heatmap Logic ---
+        async function loadHeatmap(marketType = '1') {
+            const container = document.getElementById('market_heatmap');
+            container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">در حال بارگذاری نقشه بازار...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/heatmap/${marketType}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    container.innerHTML = `<div class="alert alert-warning">${data.error}</div>`;
+                    return;
+                }
+
+                const sectors = {};
+                data.forEach(item => {
+                    if (!sectors[item.sector]) sectors[item.sector] = [];
+                    sectors[item.sector].push({
+                        x: item.name,
+                        y: item.value,
+                        pcp: item.pcp
+                    });
+                });
+
+                const series = Object.keys(sectors).map(sector => ({
+                    name: sector,
+                    data: sectors[sector]
+                }));
+
+                container.innerHTML = '';
+                new ApexCharts(container, {
+                    series: series,
+                    legend: { show: false },
+                    chart: { height: 500, type: 'treemap', toolbar: { show: false } },
+                    title: { text: 'نقشه بازار (بر اساس ارزش معاملات)', align: 'center' },
+                    plotOptions: {
+                        treemap: {
+                            distributed: true,
+                            enableShades: true,
+                            shadeIntensity: 0.5,
+                            colorScale: {
+                                ranges: [
+                                    { from: -10, to: -3, color: '#ef4444' },
+                                    { from: -3, to: -0.5, color: '#f87171' },
+                                    { from: -0.5, to: 0.5, color: '#94a3b8' },
+                                    { from: 0.5, to: 3, color: '#4ade80' },
+                                    { from: 3, to: 10, color: '#22c55e' }
+                                ]
+                            }
+                        }
+                    },
+                    tooltip: {
+                        custom: function({ series, seriesIndex, dataPointIndex, w }) {
+                            const item = w.config.series[seriesIndex].data[dataPointIndex];
+                            return `<div class="p-2 bg-dark text-white border-0 shadow">
+                                <strong>${item.x}</strong><br>
+                                تغییر: ${item.pcp}%<br>
+                                ارزش: ${item.y.toLocaleString()}
+                            </div>`;
+                        }
+                    }
+                }).render();
+            } catch (e) {
+                container.innerHTML = '<div class="alert alert-danger">خطا در دریافت اطلاعات نقشه بازار</div>';
+            }
+        }
+
+        // --- Price Alerts Logic ---
+        let alerts = JSON.parse(localStorage.getItem('tse_alerts') || '[]');
+        
+        function addAlert() {
+            const symbol = document.getElementById('alert_symbol').value.trim();
+            const price = parseFloat(document.getElementById('alert_price').value);
+            const type = document.getElementById('alert_type').value;
+
+            if (!symbol || isNaN(price)) {
+                alert('لطفا نماد و قیمت را وارد کنید');
+                return;
+            }
+
+            alerts.push({ id: Date.now(), symbol, price, type, active: true });
+            localStorage.setItem('tse_alerts', JSON.stringify(alerts));
+            renderAlerts();
+            document.getElementById('alert_symbol').value = '';
+            document.getElementById('alert_price').value = '';
+        }
+
+        function removeAlert(id) {
+            alerts = alerts.filter(a => a.id !== id);
+            localStorage.setItem('tse_alerts', JSON.stringify(alerts));
+            renderAlerts();
+        }
+
+        function renderAlerts() {
+            const list = document.getElementById('alerts_list');
+            list.innerHTML = alerts.map(a => `
+                <div class="alert-item d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                    <div class="small">
+                        <strong>${a.symbol}</strong>: ${a.type === 'above' ? ' بالای ' : ' پایین '} ${a.price.toLocaleString()}
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger border-0" onclick="removeAlert(${a.id})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function checkAlerts(currentSymbol, currentPrice) {
+            alerts.forEach(a => {
+                if (a.active && a.symbol === currentSymbol) {
+                    let triggered = false;
+                    if (a.type === 'above' && currentPrice >= a.price) triggered = true;
+                    if (a.type === 'below' && currentPrice <= a.price) triggered = true;
+
+                    if (triggered) {
+                        if (Notification.permission === "granted") {
+                            new Notification(`هشدار قیمت: ${a.symbol}`, { body: `قیمت به ${currentPrice.toLocaleString()} رسید.` });
+                        } else {
+                            alert(`🔔 هشدار قیمت: ${a.symbol} به ${currentPrice.toLocaleString()} رسید!`);
+                        }
+                        a.active = false;
+                        localStorage.setItem('tse_alerts', JSON.stringify(alerts));
+                        renderAlerts();
+                    }
+                }
+            });
+        }
+
+        if (Notification.permission !== "denied") Notification.requestPermission();
+
+        // --- Symbol Comparison Logic ---
+        let compareList = [];
+        function addToCompare() {
+            const symbol = symbolSelect.value;
+            if (!symbol || compareList.includes(symbol)) return;
+            if (compareList.length >= 3) { alert('حداکثر ۳ نماد برای مقایسه'); return; }
+            compareList.push(symbol);
+            updateCompareUI();
+        }
+
+        function updateCompareUI() {
+            const container = document.getElementById('compare_tags');
+            container.innerHTML = compareList.map(s => `
+                <span class="badge bg-info me-1">
+                    ${s} <i class="fas fa-times ms-1 pointer" onclick="removeFromCompare('${s}')"></i>
+                </span>
+            `).join('');
+        }
+
+        function removeFromCompare(symbol) {
+            compareList = compareList.filter(s => s !== symbol);
+            updateCompareUI();
+        }
+
+        async function runComparison() {
+            if (compareList.length < 2) { alert('حداقل ۲ نماد برای مقایسه انتخاب کنید'); return; }
+            const resultsDiv = document.getElementById('comparison_results');
+            resultsDiv.innerHTML = '<div class="spinner-border text-primary"></div>';
+            try {
+                const promises = compareList.map(s => fetch('/api/fetch_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ asset_type: assetTypeSelect.value, symbol: s, service_type: 'realtime' })
+                }).then(r => r.json()));
+                const datasets = await Promise.all(promises);
+                
+                let html = '<div class="table-responsive"><table class="table table-sm table-hover"><thead><tr><th>فاکتور</th>';
+                compareList.forEach(s => html += `<th>${s}</th>`);
+                html += '</tr></thead><tbody>';
+
+                const factors = [
+                    { label: 'آخرین قیمت', key: 'pl' },
+                    { label: 'تغییر قیمت', key: 'pcp', suffix: '%' },
+                    { label: 'RSI (14)', key: 'RSI' },
+                    { label: 'حجم معاملات', key: 'tvol' }
+                ];
+
+                factors.forEach(f => {
+                    html += `<tr><td>${f.label}</td>`;
+                    datasets.forEach(d => {
+                        const val = d[0] ? d[0][f.key] : 'N/A';
+                        html += `<td>${val}${f.suffix || ''}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                resultsDiv.innerHTML = html;
+            } catch (e) { resultsDiv.innerHTML = '<div class="alert alert-danger">خطا در مقایسه نمادها</div>'; }
+        }
+
+        // --- Market Status & Time ---
+        async function updateMarketStatus() {
+            try {
+                const response = await fetch('/api/market_status');
+                const data = await response.json();
+                const badge = document.getElementById('market_status_badge');
+                badge.innerHTML = `<i class="fa-solid fa-circle fa-fade me-1"></i> بازار: ${data.status}`;
+                document.getElementById('current_time').textContent = data.time;
+            } catch (e) {}
+        }
+        setInterval(updateMarketStatus, 10000);
+        updateMarketStatus();
+
+        // Initialize
+        renderWatchlist();
+        renderAlerts();
+        loadHeatmap();
+
+
+        function getFilename() {
+            const today = new Date().toISOString().split('T')[0];
+            return `TSETMC-Export-${today}`;
+        }
+
+        async function downloadFile(format) {
+            const filename = getFilename();
+            const response = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: currentData, format: format, filename: filename })
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filename}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+                a.click();
+            }
+        }
+
+        document.getElementById('btn_copy').addEventListener('click', () => {
+            if (!currentData || currentData.length === 0) return;
+            const text = currentData.map(row => Object.values(row).join('\t')).join('\n');
+            navigator.clipboard.writeText(text).then(() => alert('داده‌ها در حافظه کپی شد'));
+        });
+
+        document.getElementById('btn_excel').addEventListener('click', () => downloadFile('excel'));
+        document.getElementById('btn_csv').addEventListener('click', () => downloadFile('csv'));
+
+        document.getElementById('btn_pdf').addEventListener('click', async () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const symbol = symbolSelect.value || 'Export';
+            
+            const btn = document.getElementById('btn_pdf');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید PDF...';
+
+            try {
+                const canvas = await html2canvas(document.getElementById('result_container'));
+                const imgData = canvas.toDataURL('image/png');
+                const imgProps = doc.getImageProperties(imgData);
+                const pdfWidth = doc.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                doc.save(`Analysis_${symbol}.pdf`);
+            } catch (e) {
+                alert('خطا در تولید PDF');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> PDF';
+            }
+        });
+
+        document.getElementById('btn_package').addEventListener('click', async () => {
+            if (!currentData || currentData.length === 0) {
+                alert('ابتدا داده‌ها را دریافت کنید');
+                return;
+            }
+
+            const btn = document.getElementById('btn_package');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید نمودارهای زیبا...';
+            btn.disabled = true;
+
+            try {
+                const zip = new JSZip();
+                const symbol = symbolSelect.value || 'Export';
+                const today = new Date().toISOString().split('T')[0];
+                
+                // 1. Prepare Data (Sort by date)
+                const sortedData = [...currentData].sort((a, b) => {
+                    const da = a.date || a.time || '';
+                    const db = b.date || b.time || '';
+                    return da.localeCompare(db);
+                });
+
+                // 2. Generate Excel (using SheetJS)
+                const ws = XLSX.utils.json_to_sheet(sortedData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Data");
+                const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                zip.file(`${symbol}_Data.xlsx`, excelBuffer);
+
+                // 3. Generate CSV
+                const csvContent = XLSX.utils.sheet_to_csv(ws);
+                zip.file(`${symbol}_Data.csv`, "\ufeff" + csvContent); // Add BOM for Excel UTF-8 support
+
+                // 4. Generate Beautiful Charts with ApexCharts
+                const chartsFolder = zip.folder("Charts");
+                
+                // Helper to render and capture
+                const captureChart = async (options, id) => {
+                    const el = document.getElementById(id);
+                    el.innerHTML = '';
+                    const chart = new ApexCharts(el, options);
+                    await chart.render();
+                    await new Promise(r => setTimeout(r, 1000)); // Wait for animations
+                    const result = await chart.dataURI();
+                    const uri = result.imgURI || result.dataUri || result;
+                    chart.destroy();
+                    if (typeof uri === 'string' && uri.includes(',')) {
+                        return uri.split(',')[1];
+                    }
+                    throw new Error(`خطا در تولید تصویر نمودار ${id}`);
+                };
+
+                const commonOptions = {
+                    chart: { 
+                        type: 'line', 
+                        height: 600, 
+                        width: 1000, 
+                        animations: { enabled: false }, 
+                        background: '#fff',
+                        toolbar: { show: false }
+                    },
+                    theme: { mode: 'light', palette: 'palette1' },
+                    xaxis: { 
+                        categories: sortedData.map(d => d.date || d.time || ''),
+                        labels: { rotate: -45, style: { fontSize: '12px' } }
+                    },
+                    yaxis: {
+                        labels: { formatter: (val) => val ? val.toLocaleString() : val }
+                    },
+                    title: { align: 'center', style: { fontSize: '22px', fontWeight: 'bold', color: '#333' } },
+                    grid: { borderColor: '#f1f1f1' },
+                    stroke: { width: 3, curve: 'smooth' }
+                };
+
+                // A. Candlestick Chart
+                if (sortedData[0].open && sortedData[0].close) {
+                    const candleData = sortedData.map(d => ({
+                        x: d.date || d.time,
+                        y: [d.open, d.high, d.low, d.close]
+                    }));
+                    const options = {
+                        ...commonOptions,
+                        chart: { ...commonOptions.chart, type: 'candlestick' },
+                        title: { ...commonOptions.title, text: symbol },
+                        series: [{ data: candleData }]
+                    };
+                    const img = await captureChart(options, 'chart_candle_export');
+                    chartsFolder.file(`${symbol}.png`, img, { base64: true });
+                }
+
+                // B. Separate Indicators
+                const baseKeys = ['date', 'time', 'open', 'high', 'low', 'close', 'volume', 'l18', 'l30', 'isin', 'cs', 'cs_id', 'eps', 'pe', 'pc', 'pcc', 'pcp', 'pmin', 'pmax', 'count', 'date_publish', 'date_send', 'title', 'link'];
+                const indicatorKeys = Object.keys(sortedData[0]).filter(k => !baseKeys.includes(k));
+                const indicatorColors = [
+                    '#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0', 
+                    '#3F51B5', '#03A9F4', '#4CAF50', '#F9CE1D', '#FF9800',
+                    '#E91E63', '#9C27B0', '#673AB7', '#2196F3', '#00BCD4'
+                ];
+
+                for (let i = 0; i < indicatorKeys.length; i++) {
+                    const key = indicatorKeys[i];
+                    if (sortedData[0][key] !== undefined && sortedData[0][key] !== null) {
+                        const options = {
+                            ...commonOptions,
+                            colors: [indicatorColors[i % indicatorColors.length]],
+                            title: { ...commonOptions.title, text: key },
+                            series: [{ name: key, data: sortedData.map(d => d[key]) }]
+                        };
+                        // Use any available export div
+                        const img = await captureChart(options, 'chart_trend_export');
+                        const fileName = `${(i + 1).toString().padStart(2, '0')}_${key}.png`;
+                        chartsFolder.file(fileName, img, { base64: true });
+                    }
+                }
+
+                // 5. Finalize ZIP
+                const content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, `Analysis_${symbol}_${today}.zip`);
+
+            } catch (e) {
+                console.error(e);
+                alert('خطا در تولید پکیج: ' + e.message);
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
