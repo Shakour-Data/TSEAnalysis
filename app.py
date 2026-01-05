@@ -18,6 +18,27 @@ API_KEY = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3"
 BASE_URL = "https://brsapi.ir"
 REQUEST_USAGE_LIMIT = 0.1  # Limit to 10% of requests
 
+# Global counters for request statistics per service
+stats = {
+    "global": {"total": 0, "blocked": 0, "success": 0},
+    "services": {}
+}
+
+def update_stats(service, status):
+    global stats
+    if service not in stats["services"]:
+        stats["services"][service] = {"total": 0, "blocked": 0, "success": 0}
+    
+    stats["global"]["total"] += 1
+    stats["services"][service]["total"] += 1
+    
+    if status == "blocked":
+        stats["global"]["blocked"] += 1
+        stats["services"][service]["blocked"] += 1
+    elif status == "success":
+        stats["global"]["success"] += 1
+        stats["services"][service]["success"] += 1
+
 class TSETMCClient:
     def __init__(self, api_key):
         self.api_key = api_key
@@ -34,10 +55,14 @@ class TSETMCClient:
         self._symbols_cache = {} # Simple cache for symbols
 
     def _make_request(self, endpoint, params=None):
+        global stats
+        stats["total_requests"] += 1
+
         # Exempt symbol lists from the 10% limit to ensure UI stability
         is_critical = "AllSymbols.php" in endpoint or "Index.php" in endpoint
         
         if not is_critical and random.random() > REQUEST_USAGE_LIMIT:
+            stats["blocked_requests"] += 1
             print(f"DEBUG: Request to {endpoint} blocked by 10% usage limit.")
             return {"error": "محدودیت موقت: در حال حاضر تنها ۱۰٪ از درخواست‌ها پردازش می‌شوند. لطفاً دوباره تلاش کنید."}
 
@@ -49,6 +74,7 @@ class TSETMCClient:
         print(f"DEBUG: Requesting {url} with params {request_params}")
         try:
             response = self.session.get(url, params=request_params, timeout=20)
+            stats["successful_requests"] += 1
             
             # Check if response is empty
             if not response.text.strip():
@@ -628,9 +654,12 @@ def download():
     return "Invalid format", 400
 
 @app.route('/api/market_status')
-@cache.cached(timeout=60)
 def get_market_status():
-    return jsonify({'status': 'در حال فعالیت', 'time': datetime.now().strftime('%H:%M:%S')})
+    return jsonify({
+        'status': 'در حال فعالیت', 
+        'time': datetime.now().strftime('%H:%M:%S'),
+        'stats': stats
+    })
 
 if __name__ == '__main__':
     print("Starting Flask server on http://0.0.0.0:5000 ...")

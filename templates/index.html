@@ -282,13 +282,20 @@
                         </select>
                     </div>
 
-                    <div class="section-title">سرویس‌های تحلیلی</div>
+                    <div class="section-title">تحلیل و هوشمندی</div>
+                    <div id="analysis_list" class="nav flex-column px-2 mb-3">
+                        <div class="nav-link" data-value="technical" data-desc="تحلیل تکنیکال جامع (۱۸ اندیکاتور در ۳ بعد روند، شتاب و نوسان)">
+                            <i class="fa-solid fa-microchip"></i> تحلیل تکنیکال
+                        </div>
+                        <div class="nav-link" data-value="heatmap" data-desc="نقشه حرارتی بازار بر اساس ارزش معاملات و تغییرات قیمت">
+                            <i class="fa-solid fa-border-all"></i> نقشه بازار (Heatmap)
+                        </div>
+                    </div>
+
+                    <div class="section-title">سرویس‌های داده</div>
                     <div id="service_list" class="nav flex-column px-2">
                         <div class="nav-link active" data-value="realtime" data-desc="اطلاعات کامل لحظه‌ای شامل قیمت، حجم، ارزش معاملات و P/E">
                             <i class="fa-solid fa-bolt"></i> اطلاعات لحظه‌ای
-                        </div>
-                        <div class="nav-link" data-value="technical" data-desc="تحلیل تکنیکال جامع (۱۸ اندیکاتور در ۳ بعد روند، شتاب و نوسان)">
-                            <i class="fa-solid fa-microchip"></i> تحلیل تکنیکال
                         </div>
                         <div class="nav-link" data-value="history" data-desc="داده‌های OHLCV تاریخی روزانه نماد">
                             <i class="fa-solid fa-calendar-days"></i> تاریخچه قیمت
@@ -310,9 +317,6 @@
                         </div>
                         <div class="nav-link" data-value="codal" data-desc="اطلاعیه‌ها و گزارش‌های منتشر شده در سامانه کدال">
                             <i class="fa-solid fa-file-contract"></i> اطلاعیه‌های کدال
-                        </div>
-                        <div class="nav-link" data-value="heatmap" data-desc="نقشه حرارتی بازار بر اساس ارزش معاملات و تغییرات قیمت">
-                            <i class="fa-solid fa-border-all"></i> نقشه بازار (Heatmap)
                         </div>
                     </div>
 
@@ -351,6 +355,12 @@
                         <p class="text-muted mb-0">دسترسی هوشمند به داده‌های بورس اوراق بهادار تهران</p>
                     </div>
                     <div class="d-flex align-items-center gap-3">
+                        <div id="api_stats" class="bg-white border rounded-pill px-3 py-2 small text-muted d-none d-md-flex align-items-center">
+                            <i class="fa-solid fa-chart-line me-2 text-primary"></i>
+                            <span>درخواست‌ها: <b id="stat_total">0</b></span>
+                            <span class="mx-2">|</span>
+                            <span>مسدود شده: <b id="stat_blocked" class="text-danger">0</b></span>
+                        </div>
                         <div id="market_status_badge" class="badge bg-success-soft text-success px-3 py-2 rounded-pill border border-success">
                             <i class="fa-solid fa-circle fa-fade me-1"></i> بازار: در حال فعالیت
                         </div>
@@ -419,6 +429,28 @@
 
                 <!-- Results Section -->
                 <div id="result_container" style="display: none;">
+                    <!-- Technical Summary Card -->
+                    <div id="tech_summary_container" class="card p-4 mb-4" style="display: none;">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-3 text-center border-start">
+                                <div class="small text-muted mb-1">سیگنال هوشمند</div>
+                                <div id="summary_signal" class="h4 fw-bold mb-0">---</div>
+                            </div>
+                            <div class="col-md-3 text-center border-start">
+                                <div class="small text-muted mb-1">الگوی شمعی</div>
+                                <div id="summary_pattern" class="h4 fw-bold mb-0">---</div>
+                            </div>
+                            <div class="col-md-3 text-center border-start">
+                                <div class="small text-muted mb-1">شاخص RSI</div>
+                                <div id="summary_rsi" class="h4 fw-bold mb-0">---</div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="small text-muted mb-1">روند (SMA)</div>
+                                <div id="summary_trend" class="h4 fw-bold mb-0">---</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Heatmap Container -->
                     <div id="heatmap_container" class="card p-4 mb-4" style="display: none;">
                         <h4 class="fw-bold mb-3 text-primary">نقشه حرارتی بازار</h4>
@@ -481,7 +513,7 @@
         const symbolSelect = document.getElementById('symbol');
         const symbolSearch = document.getElementById('symbol_search');
         const btnRefreshSymbols = document.getElementById('btn_refresh_symbols');
-        const serviceLinks = document.querySelectorAll('#service_list .nav-link');
+        const serviceLinks = document.querySelectorAll('.nav-link[data-value]');
         const serviceDesc = document.getElementById('service_desc');
         const btnFetch = document.getElementById('btn_fetch');
         const loading = document.getElementById('loading');
@@ -536,6 +568,13 @@
         serviceLinks.forEach(link => {
             link.addEventListener('click', () => {
                 if (link.classList.contains('disabled')) return;
+                
+                const service = link.dataset.value;
+                if (service === 'heatmap') {
+                    loadHeatmap();
+                    return;
+                }
+
                 serviceLinks.forEach(l => l.classList.remove('active'));
                 link.classList.add('active');
                 updateServiceDesc();
@@ -545,7 +584,7 @@
                     populateSymbolSelect(allSymbols);
                 }
 
-                if (link.dataset.value === 'technical' && !assetTypeSelect.value) {
+                if (service === 'technical' && !assetTypeSelect.value) {
                     alert('لطفاً ابتدا نوع بازار را انتخاب کنید.');
                 }
             });
@@ -568,7 +607,7 @@
                 symbolSelect.appendChild(allOpt);
                 
                 // Auto-select "all" for indices
-                if (assetTypeSelect.value.startsWith('indices')) {
+                if (assetTypeSelect.value.includes('indices')) {
                     allOpt.selected = true;
                 }
             }
@@ -628,7 +667,7 @@
             symbolSearch.value = '';
             allSymbols = [];
 
-            if (val.startsWith('indices')) {
+            if (val.includes('indices')) {
                 serviceLinks.forEach(link => {
                     // Enable Realtime, Technical, and History for indices
                     const allowed = ['realtime', 'technical', 'history'];
@@ -707,9 +746,15 @@
                 
                 currentData = await response.json();
                 if (currentData.error) {
-                    alert('خطا: ' + currentData.error);
+                    if (currentData.error.includes('محدودیت')) {
+                        alert('⚠️ ' + currentData.error + '\n\nنکته: به دلیل محدودیت‌های سرور، برخی درخواست‌ها مسدود می‌شوند. لطفاً چند ثانیه دیگر دوباره دکمه دریافت داده را بزنید.');
+                    } else {
+                        alert('خطا: ' + currentData.error);
+                    }
+                    updateMarketStatus(); // Refresh stats immediately
                 } else {
                     renderTable(currentData);
+                    updateMarketStatus(); // Refresh stats immediately
                 }
             } catch (e) {
                 alert('خطا در دریافت داده');
@@ -720,11 +765,42 @@
         });
 
         function renderTable(data) {
-            if (!data || data.length === 0) { alert('داده‌ای یافت نشد'); return; }
+            if (!data || data.length === 0) { 
+                alert('داده‌ای یافت نشد. ممکن است برای این نماد در بازه زمانی انتخاب شده داده‌ای وجود نداشته باشد.'); 
+                return; 
+            }
 
             resultContainer.style.display = 'block';
+            document.getElementById('heatmap_container').style.display = 'none';
+            document.getElementById('table_container').style.display = 'block';
+            document.getElementById('chart_container').style.display = 'block';
+            
             tableHead.innerHTML = '';
             tableBody.innerHTML = '';
+
+            // Handle Technical Summary Card
+            const techSummary = document.getElementById('tech_summary_container');
+            if (activeService === 'technical' && data.length > 0) {
+                techSummary.style.display = 'block';
+                const latest = data[0];
+                
+                const sigEl = document.getElementById('summary_signal');
+                sigEl.textContent = latest.Signal || 'Neutral';
+                sigEl.className = 'h4 fw-bold mb-0 ' + (latest.Signal?.includes('Bullish') ? 'text-success' : latest.Signal?.includes('Bearish') ? 'text-danger' : '');
+                
+                document.getElementById('summary_pattern').textContent = latest.Pattern || '---';
+                document.getElementById('summary_rsi').textContent = latest.RSI || '---';
+                
+                const trendEl = document.getElementById('summary_trend');
+                if (latest.SMA20 && latest.SMA50) {
+                    trendEl.textContent = latest.SMA20 > latest.SMA50 ? 'صعودی' : 'نزولی';
+                    trendEl.className = 'h4 fw-bold mb-0 ' + (latest.SMA20 > latest.SMA50 ? 'text-success' : 'text-danger');
+                } else {
+                    trendEl.textContent = '---';
+                }
+            } else {
+                techSummary.style.display = 'none';
+            }
 
             const persianKeys = {
                 'l18': 'نماد', 'l30': 'نام کامل', 'pc': 'پایانی', 'pcc': 'تغییر', 'pcp': 'درصد',
@@ -845,6 +921,13 @@
 
         // --- Heatmap Logic ---
         async function loadHeatmap(marketType = '1') {
+            // Show heatmap container, hide others
+            resultContainer.style.display = 'block';
+            document.getElementById('heatmap_container').style.display = 'block';
+            document.getElementById('tech_summary_container').style.display = 'none';
+            document.getElementById('table_container').style.display = 'none';
+            document.getElementById('chart_container').style.display = 'none';
+
             const container = document.getElementById('market_heatmap');
             container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">در حال بارگذاری نقشه بازار...</p></div>';
             
@@ -1041,6 +1124,12 @@
                 const badge = document.getElementById('market_status_badge');
                 badge.innerHTML = `<i class="fa-solid fa-circle fa-fade me-1"></i> بازار: ${data.status}`;
                 document.getElementById('current_time').textContent = data.time;
+                
+                if (data.stats) {
+                    document.getElementById('stat_total').textContent = data.stats.total_requests;
+                    document.getElementById('stat_blocked').textContent = data.stats.blocked_requests;
+                    document.getElementById('api_stats').classList.remove('d-none');
+                }
             } catch (e) {}
         }
         setInterval(updateMarketStatus, 10000);
