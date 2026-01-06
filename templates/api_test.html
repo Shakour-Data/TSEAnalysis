@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تست وب‌سرویس TSETMC</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-light: #f8fafc;
+            --text-primary: #1e293b;
+            --border-color: #e2e8f0;
+        }
+        body { font-family: 'Vazirmatn', sans-serif; background-color: var(--bg-light); color: var(--text-primary); }
+        .card { border-radius: 15px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .table-container { background: white; padding: 1rem; border-radius: 15px; overflow: auto; max-height: 600px; }
+        .nav-link { color: #64748b; font-weight: 500; }
+        .nav-link.active { color: var(--primary-color); font-weight: 700; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">تحلیل هوشمند</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">تحلیل تکنیکال</a>
+                <a class="nav-link active" href="/api_test">تست وب‌سرویس</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card p-4">
+                    <h5 class="fw-bold mb-3"><i class="fa-solid fa-vial me-2"></i> تست و تایید دریافت داده‌ها</h5>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">نوع بازار</label>
+                            <select id="asset_type" class="form-select">
+                                <option value="1">بورس تهران</option>
+                                <option value="2">فرابورس</option>
+                                <option value="5">صندوق‌های ETF</option>
+                                <option value="indices_market">شاخص‌های کل</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">سرویس</label>
+                            <select id="service_type" class="form-select">
+                                <option value="realtime">اطلاعات لحظه‌ای</option>
+                                <option value="history">تاریخچه قیمت</option>
+                                <option value="client_type">حقیقی-حقوقی</option>
+                                <option value="candlestick">کندل‌استیک</option>
+                                <option value="transactions">ریزمعاملات</option>
+                                <option value="shareholders">سهامداران</option>
+                                <option value="codal">کدال</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">جستجوی نماد</label>
+                            <div class="input-group">
+                                <input type="text" id="symbol_search" class="form-control" placeholder="نام نماد...">
+                                <select id="symbol_select" class="form-select" style="max-width: 150px;"></select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">از تاریخ</label>
+                            <input type="text" id="start_date" class="form-control" data-jdp placeholder="1402-01-01">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">تا تاریخ</label>
+                            <input type="text" id="end_date" class="form-control" data-jdp placeholder="1402-12-29">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-center pt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="adjusted_prices" checked>
+                                <label class="form-check-label" for="adjusted_prices">تعدیل قیمت</label>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button id="btn_fetch" class="btn btn-primary w-100">دریافت داده</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="result_section" style="display: none;">
+            <div class="card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold m-0">داده‌های خام دریافتی (JSON)</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyRawJson()">کپی JSON</button>
+                </div>
+                <pre id="raw_json" class="bg-light p-3 rounded border" style="max-height: 300px; overflow: auto; font-size: 12px; direction: ltr; text-align: left;"></pre>
+                
+                <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                    <h6 class="fw-bold m-0">نمایش جدولی</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="copyTable()">کپی جدول</button>
+                </div>
+                <div class="table-container">
+                    <table class="table table-sm table-hover" id="data_table">
+                        <thead id="table_head"></thead>
+                        <tbody id="table_body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center my-5" style="display: none;">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">در حال دریافت داده‌ها...</p>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+    <script>
+        // Initialize Jalali Datepicker
+        jalaliDatepicker.startWatch({
+            separatorChar: "-",
+            minDate: "attr",
+            maxDate: "attr"
+        });
+
+        const assetType = document.getElementById('asset_type');
+        const serviceType = document.getElementById('service_type');
+        const symbolSearch = document.getElementById('symbol_search');
+        const symbolSelect = document.getElementById('symbol_select');
+        const btnFetch = document.getElementById('btn_fetch');
+        const loading = document.getElementById('loading');
+        const resultSection = document.getElementById('result_section');
+        const rawJson = document.getElementById('raw_json');
+        const tableHead = document.getElementById('table_head');
+        const tableBody = document.getElementById('table_body');
+
+        let currentData = [];
+
+        // Load symbols
+        async function loadSymbols() {
+            const type = assetType.value;
+            if (!type) return;
+            try {
+                const res = await fetch(`/api/symbols/${type}`);
+                const data = await res.json();
+                symbolSelect.innerHTML = data.map(s => `<option value="${s.symbol}">${s.symbol} - ${s.name || ''}</option>`).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        assetType.addEventListener('change', loadSymbols);
+        loadSymbols();
+
+        symbolSearch.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            Array.from(symbolSelect.options).forEach(opt => {
+                opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+
+        btnFetch.addEventListener('click', async () => {
+            const symbol = symbolSelect.value;
+            const service = serviceType.value;
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            const adjusted = document.getElementById('adjusted_prices').checked;
+
+            if (!symbol && service !== 'indices_market') return;
+
+            loading.style.display = 'block';
+            resultSection.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/fetch_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        asset_type: assetType.value,
+                        symbol: symbol,
+                        service_type: service,
+                        start_date: startDate,
+                        end_date: endDate,
+                        adjusted: adjusted
+                    })
+                });
+                const data = await response.json();
+                currentData = data;
+                
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    renderData(data);
+                }
+            } catch (e) {
+                alert('خطا در دریافت داده');
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        function renderData(data) {
+            resultSection.style.display = 'block';
+            rawJson.textContent = JSON.stringify(data, null, 2);
+
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (!data || data.length === 0) return;
+
+            const keys = Object.keys(data[0]);
+            const trHead = document.createElement('tr');
+            keys.forEach(k => {
+                const th = document.createElement('th');
+                th.textContent = k;
+                trHead.appendChild(th);
+            });
+            tableHead.appendChild(trHead);
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                keys.forEach(k => {
+                    const td = document.createElement('td');
+                    td.textContent = row[k] || '---';
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function copyRawJson() {
+            navigator.clipboard.writeText(rawJson.textContent).then(() => alert('JSON کپی شد'));
+        }
+
+        function copyTable() {
+            if (!currentData || currentData.length === 0) return;
+            const text = currentData.map(row => Object.values(row).join('\t')).join('\n');
+            navigator.clipboard.writeText(text).then(() => alert('داده‌های جدول کپی شد'));
+        }
+    </script>
+</body>
+</html>
