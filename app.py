@@ -66,6 +66,12 @@ cache = Cache(app, config={
 
 API_KEY = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3"
 BASE_URL = "https://brsapi.ir"
+
+# Set YOUR_PROXY if you are on a foreign server (OVH, etc.)
+# Examples: "http://user:pass@host:port" or "socks5://host:port"
+# If you have a local v2ray/xray running on 1080: "socks5://127.0.0.1:1080"
+PROXY_URL = None # Change this if needed
+
 REQUEST_USAGE_LIMIT = 1.0  # Allow all requests
 
 stats = {
@@ -105,25 +111,25 @@ class TSETMCClient:
     - Connection timing patterns
     """
     
-    # Chrome 120 Browser Headers (Exact match)
+    # Chrome 131 Browser Headers (Exact match with BrsApi Rules)
     CHROME_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
         "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
         "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
         "Referer": "https://brsapi.ir/",
-        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "Sec-Ch-Ua-Mobile": "?0",
         "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
     }
     
-    def __init__(self, api_key):
+    def __init__(self, api_key, proxy=None):
         self.api_key = api_key
         self.base_url = BASE_URL
+        self.proxy = proxy
         self.active_client = None
         self.client_name = "none"
         
@@ -147,7 +153,9 @@ class TSETMCClient:
                     client_identifier="chrome_120",
                     random_tls_extension_order=True
                 )
-                self.client_name = "tls_client (Chrome 120 JA3)"
+                if self.proxy:
+                    self.active_client.proxies = {"http": self.proxy, "https": self.proxy}
+                self.client_name = "tls_client (JA3 Spoofing)"
                 print(f"DEBUG: Using {self.client_name}")
                 return
             except Exception as e:
@@ -157,31 +165,16 @@ class TSETMCClient:
         if CURL_CFFI_AVAILABLE:
             try:
                 self.active_client = crequests.Session()
+                if self.proxy:
+                    self.active_client.proxies = {"http": self.proxy, "https": self.proxy}
                 self.client_name = "curl_cffi (Chrome impersonate)"
                 print(f"DEBUG: Using {self.client_name}")
                 return
             except Exception as e:
                 print(f"DEBUG: curl_cffi init failed: {e}")
         
-        # Priority 3: httpx with HTTP/2
-        if HTTPX_AVAILABLE:
-            try:
-                self.active_client = httpx.Client(
-                    http2=True,
-                    verify=False,
-                    timeout=30.0,
-                    headers=self.CHROME_HEADERS
-                )
-                self.client_name = "httpx (HTTP/2)"
-                print(f"DEBUG: Using {self.client_name}")
-                return
-            except Exception as e:
-                print(f"DEBUG: httpx init failed: {e}")
-        
-        # Fallback: Standard requests (will likely be blocked)
-        self.active_client = requests.Session()
-        self.active_client.headers.update(self.CHROME_HEADERS)
-        self.client_name = "requests (standard - may be blocked)"
+        # Fallback will be handled per-request for httpx and others
+        self.client_name = "per-request clients"
         print(f"DEBUG: Using {self.client_name}")
 
     def _clear_cache_on_startup(self):
@@ -347,11 +340,13 @@ class TSETMCClient:
         if CURL_CFFI_AVAILABLE:
             try:
                 print(f"DEBUG: Trying curl_cffi for {endpoint}...")
+                proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
                 response = crequests.get(
                     full_url,
                     headers=self.CHROME_HEADERS,
                     impersonate="chrome120",
                     timeout=20,
+                    proxies=proxies,
                     verify=False
                 )
                 if response.status_code == 200:
@@ -366,7 +361,8 @@ class TSETMCClient:
         if HTTPX_AVAILABLE:
             try:
                 print(f"DEBUG: Trying httpx HTTP/2 for {endpoint}...")
-                with httpx.Client(http2=True, verify=False, timeout=20.0) as client:
+                proxy = self.proxy if self.proxy else None
+                with httpx.Client(http2=True, verify=False, timeout=20.0, proxy=proxy) as client:
                     response = client.get(full_url, headers=self.CHROME_HEADERS)
                     if response.status_code == 200:
                         data = response.json()
@@ -386,11 +382,13 @@ class TSETMCClient:
         # Method 5: Standard requests (last resort)
         try:
             print(f"DEBUG: Trying standard requests for {endpoint}...")
+            proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
             response = requests.get(
                 full_url,
                 headers=self.CHROME_HEADERS,
                 timeout=15,
-                verify=False
+                verify=False,
+                proxies=proxies
             )
             if response.status_code == 200:
                 data = response.json()
@@ -439,7 +437,18 @@ class TSETMCClient:
                 "--http2",  # Force HTTP/2
                 "--max-time", "25",
                 "--tlsv1.3",  # Force TLS 1.3
-            ] + header_args + [full_url]
+            ]
+            
+            # Add proxy to curl if available
+            if self.proxy:
+                if "socks5" in self.proxy:
+                    # Logic to extract host:port from proxy string like socks5://127.0.0.1:1080
+                    proxy_addr = self.proxy.split("//")[-1]
+                    cmd += ["--socks5-hostname", proxy_addr]
+                else:
+                    cmd += ["-x", self.proxy]
+                    
+            cmd = cmd + header_args + [full_url]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
@@ -620,7 +629,7 @@ class TSETMCClient:
             return res['announcement']
         return res
 
-client = TSETMCClient(API_KEY)
+client = TSETMCClient(API_KEY, PROXY_URL)
 
 
 @app.route('/')
