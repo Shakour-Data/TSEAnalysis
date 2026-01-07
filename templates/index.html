@@ -404,8 +404,11 @@
                     </div>
                     
                     <div class="mt-3 px-2">
-                        <button class="btn btn-sm btn-outline-secondary w-100 rounded-pill" data-bs-toggle="modal" data-bs-target="#statsModal">
+                        <button class="btn btn-sm btn-outline-secondary w-100 rounded-pill mb-2" data-bs-toggle="modal" data-bs-target="#statsModal">
                             <i class="fa-solid fa-chart-pie me-1"></i> آمار درخواست‌ها
+                        </button>
+                        <button id="btn_sync_registry" class="btn btn-sm btn-outline-warning w-100 rounded-pill">
+                            <i class="fa-solid fa-cloud-arrow-down me-1"></i> بروزرسانی کل حافظه
                         </button>
                     </div>
                 </div>
@@ -440,14 +443,12 @@
                 <div class="card filter-card p-4">
                     <div class="row g-4 align-items-end">
                         <div class="col-lg-3">
-                            <label class="form-label"><i class="fa-solid fa-clock me-1"></i> تنظیمات زمان</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="timeframe" id="tf_daily" value="daily" checked>
-                                <label class="btn btn-outline-primary" for="tf_daily">روزانه</label>
-                                
-                                <input type="radio" class="btn-check" name="timeframe" id="tf_weekly" value="weekly">
-                                <label class="btn btn-outline-primary" for="tf_weekly">هفتگی</label>
-                            </div>
+                            <label class="form-label"><i class="fa-solid fa-list-check me-1"></i> نوع خروجی تحلیل</label>
+                            <select id="analysis_type_select" class="form-select">
+                                <option value="technical">تحلیل تکنیکال پیشرفته</option>
+                                <option value="history">تاریخچه قیمتی</option>
+                                <option value="client_type">حقیقی-حقوقی</option>
+                            </select>
                         </div>
                         <div class="col-lg-4">
                             <label class="form-label"><i class="fa-solid fa-calendar-days me-1"></i> بازه تاریخ (شمسی)</label>
@@ -459,7 +460,7 @@
                         </div>
                         <div class="col-lg-2">
                             <label class="form-label"><i class="fa-solid fa-hashtag me-1"></i> تعداد کندل</label>
-                            <input type="number" id="candle_count" class="form-control text-center" placeholder="۱۰۰" min="1">
+                            <input type="number" id="candle_count" class="form-control text-center" value="100" min="1">
                         </div>
                         <div id="codal_category_container" class="col-lg-3" style="display: none;">
                             <label class="form-label">دسته‌بندی کدال</label>
@@ -478,9 +479,15 @@
                             </select>
                         </div>
                         <div class="col-lg-3 d-flex flex-column gap-2 justify-content-end">
-                            <div class="form-check form-switch mb-1">
-                                <input class="form-check-input" type="checkbox" id="adjusted_prices" checked>
-                                <label class="form-check-label fw-bold" for="adjusted_prices">تعدیل قیمت</label>
+                            <div class="d-flex gap-3 mb-1">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="adjusted_prices" checked>
+                                    <label class="form-check-label fw-bold" for="adjusted_prices">تعدیل</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="force_refresh">
+                                    <label class="form-check-label fw-bold text-danger" for="force_refresh">بروزرسانی انلاین</label>
+                                </div>
                             </div>
                             <button id="btn_fetch" class="btn btn-primary w-100">
                                 <i class="fa-solid fa-bolt me-2"></i> شروع تحلیل هوشمند
@@ -603,11 +610,11 @@
                         </div>
                     </div>
 
-                    <!-- Chart Container -->
+                        <!-- Chart Container -->
                     <div id="chart_container" class="card p-4 mb-4" style="display: none;">
-                        <h4 class="fw-bold mb-3 text-primary">نمودار تکنیکال و حجم</h4>
+                        <h4 class="fw-bold mb-3 text-primary">نمودار تکنیکال و حجم (شمسی)</h4>
                         <div id="main_chart" style="min-height: 500px;"></div>
-                        <div id="volume_chart" style="height: 200px; margin-top: -50px;"></div>
+                        <div id="volume_chart" style="height: 250px; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 10px;"></div>
                     </div>
 
                     <!-- Indicator Charts Container -->
@@ -644,15 +651,24 @@
                         </div>
 
                         <!-- Tabs for Daily/Weekly -->
-                        <div id="tech_tabs_container" class="px-4 pt-3 bg-light border-bottom" style="display: none;">
+                        <div id="tech_tabs_container" class="px-4 pt-3 bg-light border-bottom d-flex justify-content-between align-items-center" style="display: none;">
                             <ul class="nav nav-tabs border-0" id="techTabs" role="tablist">
                                 <li class="nav-item" role="presentation">
-                                    <button class="nav-link active fw-bold" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-pane" type="button" role="tab">تحلیل روزانه</button>
+                                    <button class="nav-link active fw-bold" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-pane" type="button" role="tab" onclick="switchTimeframe('daily')">تحلیل روزانه</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly-pane" type="button" role="tab">تحلیل هفتگی</button>
+                                    <button class="nav-link fw-bold" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly-pane" type="button" role="tab" onclick="switchTimeframe('weekly')">تحلیل هفتگی</button>
                                 </li>
                             </ul>
+                            <div class="ms-auto pb-2">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="timeframe" id="tf_daily" value="daily" checked onchange="switchTimeframe('daily')">
+                                    <label class="btn btn-outline-primary" for="tf_daily">D</label>
+                                    
+                                    <input type="radio" class="btn-check" name="timeframe" id="tf_weekly" value="weekly" onchange="switchTimeframe('weekly')">
+                                    <label class="btn btn-outline-primary" for="tf_weekly">W</label>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="tab-content" id="techTabsContent">
@@ -702,6 +718,41 @@
         const symbolSelect = document.getElementById('symbol');
         const symbolSearch = document.getElementById('symbol_search');
         const btnRefreshSymbols = document.getElementById('btn_refresh_symbols');
+        const btnSyncRegistry = document.getElementById('btn_sync_registry');
+
+        if (btnSyncRegistry) {
+            btnSyncRegistry.addEventListener('click', async () => {
+                const confirmMsg = "آیا مایل به بروزرسانی کامل دیتابیس نمادها هستید؟ این کار ممکن است چند دقیقه طول بکشد و از سهمیه درخواست‌های روزانه شما کسر کند.";
+                if (!confirm(confirmMsg)) return;
+
+                btnSyncRegistry.disabled = true;
+                btnSyncRegistry.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> در حال همگام‌سازی...';
+                
+                try {
+                    const response = await fetch('/api/sync_registry', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.status === 'completed') {
+                        let successCount = 0;
+                        let total = 0;
+                        for (let k in result.details) {
+                            if (result.details[k] === 'success') successCount++;
+                            total++;
+                        }
+                        
+                        showToast('پایان عملیات', `بروزرسانی کامل شد. (${successCount}/${total} بازار با موفقیت آپدیت شدند)`, 'success');
+                    } else {
+                        showToast('خطا', 'مشکلی در عملیات همگام‌سازی پیش آمد', 'danger');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('خطای شبکه', 'عدم ارتباط با سرور محلی', 'danger');
+                } finally {
+                    btnSyncRegistry.disabled = false;
+                    btnSyncRegistry.innerHTML = '<i class="fa-solid fa-cloud-arrow-down me-1"></i> بروزرسانی کل حافظه';
+                }
+            });
+        }
         const serviceLinks = document.querySelectorAll('.nav-link[data-value]');
         const serviceDesc = document.getElementById('service_desc');
         const btnFetch = document.getElementById('btn_fetch');
@@ -736,24 +787,51 @@
         let currentData = [];
         let currentWeeklyData = [];
         let allSymbols = [];
+        let symbolBrowserCache = {}; // Local memory cache to prevent redundant fetches
         let activeService = 'technical';
+        let currentTimeframe = 'daily';
 
-        // Tab switching for Technical Analysis charts and summary
-        document.getElementById('daily-tab')?.addEventListener('shown.bs.tab', () => {
-            if (currentData && currentData.length > 0) {
-                updateTechSummary(currentData);
-                renderCandlestickChart(currentData);
-                renderIndicatorCharts(currentData);
-            }
-        });
+        // Utility: Jalali Date Formatter
+        const jalaliFormatter = (val) => {
+            if (!val) return '---';
+            const date = new Date(val);
+            if (isNaN(date.getTime())) return val;
+            return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            }).format(date);
+        };
 
-        document.getElementById('weekly-tab')?.addEventListener('shown.bs.tab', () => {
-            if (currentWeeklyData && currentWeeklyData.length > 0) {
-                updateTechSummary(currentWeeklyData);
-                renderCandlestickChart(currentWeeklyData);
-                renderIndicatorCharts(currentWeeklyData);
+        function switchTimeframe(tf) {
+            currentTimeframe = tf;
+            
+            // Sync radio buttons
+            const rb = document.getElementById(tf === 'weekly' ? 'tf_weekly' : 'tf_daily');
+            if (rb) rb.checked = true;
+            
+            // Sync tabs
+            const tabId = tf === 'weekly' ? 'weekly-tab' : 'daily-tab';
+            const targetTab = document.getElementById(tabId);
+            if (targetTab && !targetTab.classList.contains('active')) {
+                const tab = new bootstrap.Tab(targetTab);
+                tab.show();
             }
-        });
+
+            // Update Summaries and Charts
+            const dataToUse = tf === 'weekly' ? currentWeeklyData : currentData;
+            if (dataToUse && dataToUse.length > 0) {
+                updateTechSummary(dataToUse);
+                renderCandlestickChart(dataToUse);
+                renderIndicatorCharts(dataToUse);
+            }
+        }
+
+        // Tab switching listeners
+        document.getElementById('daily-tab')?.addEventListener('click', () => switchTimeframe('daily'));
+        document.getElementById('weekly-tab')?.addEventListener('click', () => switchTimeframe('weekly'));
+
+
 
         function updateTechSummary(data) {
             if (!data || data.length === 0) return;
@@ -982,12 +1060,7 @@
             }
         });
 
-        btnRefreshSymbols.addEventListener('click', () => assetTypeSelect.dispatchEvent(new Event('change')));
-        
-        document.getElementById('btn_add_watchlist')?.addEventListener('click', addToWatchlist);
-        document.getElementById('btn_add_alert')?.addEventListener('click', addAlert);
-
-        assetTypeSelect.addEventListener('change', async () => {
+        const loadSymbols = async (refresh = false) => {
             const val = assetTypeSelect.value;
             if (!val) {
                 symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
@@ -995,16 +1068,22 @@
                 return;
             }
 
-            symbolSelect.innerHTML = '<option value="">در حال بارگذاری نمادها...</option>';
+            // FAST-SWITCH: If already fetched this session, use it instantly
+            if (!refresh && symbolBrowserCache[val]) {
+                allSymbols = symbolBrowserCache[val];
+                populateSymbolSelect(allSymbols);
+                return;
+            }
+
+            symbolSelect.innerHTML = `<option value="">در حال بارگذاری نمادها${refresh ? ' (بروزرسانی)' : ''}...</option>`;
             symbolSelect.disabled = true;
             symbolSearch.disabled = true;
-            btnFetch.disabled = true; // Disable fetch while loading symbols
+            btnFetch.disabled = true;
             symbolSearch.value = '';
-            allSymbols = [];
+            // Don't clear allSymbols immediately to keep the UI stable if possible
 
             if (val.includes('indices')) {
                 serviceLinks.forEach(link => {
-                    // Enable Realtime, Technical, and History for indices
                     const allowed = ['realtime', 'technical', 'history'];
                     if (!allowed.includes(link.dataset.value)) {
                         link.classList.add('disabled');
@@ -1012,7 +1091,6 @@
                         link.classList.remove('disabled');
                     }
                 });
-                // If current active is disabled, switch to technical
                 const activeLink = document.querySelector('#analysis_list .nav-link.active');
                 if (activeLink && activeLink.classList.contains('disabled')) {
                     document.querySelector('#analysis_list .nav-link[data-value="technical"]').click();
@@ -1023,22 +1101,37 @@
             updateServiceDesc();
 
             try {
-                const response = await fetch(`/api/symbols/${val}`);
+                const response = await fetch(`/api/symbols/${val}${refresh ? '?refresh=true' : ''}`);
                 const symbols = await response.json();
                 if (symbols.error) {
                     symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
+                    if (refresh) {
+                        alert(`مشکل در بروزرسانی: ${symbols.error}`);
+                    }
                 } else {
                     allSymbols = symbols;
+                    symbolBrowserCache[val] = symbols; // Save to session cache
                     populateSymbolSelect(allSymbols);
+                    if (refresh) {
+                        showToast('بروزرسانی موفقیت‌آمیز', 'لیست نمادها با موفقیت آپدیت شد', 'success');
+                    }
                 }
             } catch (e) {
-                symbolSelect.innerHTML = `<option value="">خطا در ارتباط</option>`;
+                symbolSelect.innerHTML = `<option value="">خطا در ارتباط با سرور</option>`;
+                console.error(e);
             } finally {
-                btnFetch.disabled = false; // Re-enable fetch
+                btnFetch.disabled = false;
                 symbolSelect.disabled = false;
                 symbolSearch.disabled = false;
+                btnRefreshSymbols.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+                btnRefreshSymbols.disabled = false;
             }
-        });
+        };
+
+        btnRefreshSymbols.addEventListener('click', () => loadSymbols(true));
+        assetTypeSelect.addEventListener('change', () => loadSymbols(false));
+        
+        document.getElementById('btn_add_watchlist')?.addEventListener('click', addToWatchlist);
 
         btnFetch.addEventListener('click', async () => {
             const assetType = assetTypeSelect.value;
@@ -1049,6 +1142,7 @@
             let startDate = document.getElementById('start_date').value;
             let endDate = document.getElementById('end_date').value;
             const adjusted = document.getElementById('adjusted_prices').checked;
+            const force_refresh = document.getElementById('force_refresh').checked;
 
             if (startDate) startDate = startDate.replace(/\//g, '-');
             if (endDate) endDate = endDate.replace(/\//g, '-');
@@ -1071,9 +1165,8 @@
             currentWeeklyData = [];
 
             try {
-                // If technical, fetch both daily and weekly
                 if (serviceType === 'technical') {
-                    const selectedTf = document.querySelector('input[name="timeframe"]:checked').value;
+                    // Fetch both formats simultaneously for instant switching
                     const [dailyRes, weeklyRes] = await Promise.all([
                         fetch('/api/fetch_data', {
                             method: 'POST',
@@ -1081,7 +1174,8 @@
                             body: JSON.stringify({
                                 asset_type: assetType, symbol, service_type: 'technical',
                                 start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'daily', candle_count: candleCount
+                                timeframe: 'daily', candle_count: candleCount,
+                                refresh: force_refresh
                             })
                         }).then(r => r.json()),
                         fetch('/api/fetch_data', {
@@ -1090,7 +1184,8 @@
                             body: JSON.stringify({
                                 asset_type: assetType, symbol, service_type: 'technical',
                                 start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'weekly', candle_count: candleCount
+                                timeframe: 'weekly', candle_count: candleCount,
+                                refresh: force_refresh
                             })
                         }).then(r => r.json())
                     ]);
@@ -1100,15 +1195,10 @@
                     } else {
                         currentData = dailyRes;
                         currentWeeklyData = weeklyRes;
+                        
+                        // Default to daily for the table render but respect current toggle for the view
                         renderTable(currentData, currentWeeklyData);
-
-                        // Show the selected tab
-                        const tabId = selectedTf === 'weekly' ? 'weekly-tab' : 'daily-tab';
-                        const targetTab = document.getElementById(tabId);
-                        if (targetTab) {
-                            const tab = new bootstrap.Tab(targetTab);
-                            tab.show();
-                        }
+                        switchTimeframe(currentTimeframe);
                     }
                 } else {
                     const response = await fetch('/api/fetch_data', {
@@ -1122,7 +1212,8 @@
                             end_date: endDate,
                             adjusted: adjusted,
                             candle_count: candleCount,
-                            codal_category: codalCategorySelect.value
+                            codal_category: codalCategorySelect.value,
+                            refresh: force_refresh
                         })
                     });
                     currentData = await response.json();
@@ -1164,27 +1255,9 @@
                 techSummary.style.display = 'block';
                 chartContainer.style.display = 'block';
                 indicatorChartsContainer.style.display = 'flex';
-                techTabs.style.display = 'block';
+                techTabs.style.display = 'flex'; // Use flex for alignment
                 
-                // Show the appropriate tab based on filter selection
-                const selectedTf = document.querySelector('input[name="timeframe"]:checked').value;
-                const tabId = selectedTf === 'weekly' ? 'weekly-tab' : 'daily-tab';
-                const targetTab = document.getElementById(tabId);
-                if (targetTab) {
-                    const tab = new bootstrap.Tab(targetTab);
-                    tab.show();
-                }
-
-                // Initial render for summary/charts
-                if (selectedTf === 'weekly' && currentWeeklyData) {
-                    updateTechSummary(currentWeeklyData);
-                    renderCandlestickChart(currentWeeklyData);
-                    renderIndicatorCharts(currentWeeklyData);
-                } else {
-                    updateTechSummary(currentData);
-                    renderCandlestickChart(currentData);
-                    renderIndicatorCharts(currentData);
-                }
+                // switchTimeframe is called after renderTable in the click handler
             } else {
                 techSummary.style.display = 'none';
                 chartContainer.style.display = 'none';
@@ -1367,7 +1440,7 @@
             
             const sortedData = [...data].reverse();
             const chartData = sortedData.map(item => ({
-                x: new Date(item.date || item.time),
+                x: new Date(item.date || item.time).getTime(),
                 y: [
                     parseFloat(item.open || item.pf || item.pc),
                     parseFloat(item.high || item.pmax || item.pc),
@@ -1376,25 +1449,118 @@
                 ]
             }));
 
-            const volumeData = sortedData.map(item => ({
-                x: new Date(item.date || item.time),
-                y: parseFloat(item.volume || item.tvol || 0)
-            }));
+            const volumeData = sortedData.map(item => {
+                const open = parseFloat(item.open || item.pf || item.pc || 0);
+                const close = parseFloat(item.close || item.pc || 0);
+                return {
+                    x: new Date(item.date || item.time).getTime(),
+                    y: parseFloat(item.volume || item.tvol || 0),
+                    fillColor: close >= open ? '#22c55e' : '#ef4444',
+                    strokeColor: close >= open ? '#22c55e' : '#ef4444'
+                };
+            });
 
             const options = {
                 series: [{ name: 'قیمت', data: chartData }],
-                chart: { type: 'candlestick', height: 450, id: 'price-chart', group: 'stock', toolbar: { show: true }, fontFamily: 'Vazirmatn' },
-                xaxis: { type: 'datetime', labels: { formatter: (val) => new Date(val).toLocaleDateString('fa-IR') } },
-                yaxis: { labels: { formatter: (val) => val.toLocaleString() } },
-                plotOptions: { candlestick: { colors: { upward: '#22c55e', downward: '#ef4444' } } }
+                chart: { 
+                    type: 'candlestick', 
+                    height: 450, 
+                    id: 'price-chart', 
+                    group: 'stock', 
+                    toolbar: { show: true }, 
+                    fontFamily: 'Vazirmatn',
+                    animations: { enabled: false }
+                },
+                xaxis: { 
+                    type: 'datetime', 
+                    labels: { 
+                        formatter: jalaliFormatter,
+                        style: { fontSize: '11px' },
+                        hideOverlappingLabels: true,
+                        rotate: -45,
+                        rotateAlways: false
+                    },
+                    tooltip: { enabled: true },
+                    axisBorder: { show: true, color: '#e0e0e0' }
+                },
+                yaxis: { 
+                    labels: { 
+                        formatter: (val) => val.toLocaleString(),
+                        offsetY: 0
+                    },
+                    opposite: true
+                },
+                plotOptions: { 
+                    candlestick: { 
+                        colors: { upward: '#22c55e', downward: '#ef4444' },
+                        wick: { useFillColor: true }
+                    } 
+                },
+                tooltip: { 
+                    shared: true,
+                    custom: [
+                        function({ seriesIndex, dataPointIndex, w }) {
+                            const o = w.globals.seriesCandleO[seriesIndex][dataPointIndex];
+                            const h = w.globals.seriesCandleH[seriesIndex][dataPointIndex];
+                            const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
+                            const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
+                            const timestamp = w.globals.seriesX[seriesIndex][dataPointIndex];
+                            const dateStr = jalaliFormatter(timestamp);
+                            
+                            return (
+                                '<div class="p-2 border-0 bg-white text-dark shadow-sm rounded-3">' +
+                                '<div class="text-muted border-bottom mb-1 pb-1 text-center font-monospace">' + dateStr + '</div>' +
+                                '<div>باز: <b>' + o.toLocaleString() + '</b></div>' +
+                                '<div>بیشترین: <b>' + h.toLocaleString() + '</b></div>' +
+                                '<div>کمترین: <b>' + l.toLocaleString() + '</b></div>' +
+                                '<div>بسته: <b>' + c.toLocaleString() + '</b></div>' +
+                                '</div>'
+                            );
+                        }
+                    ]
+                }
             };
 
             const volOptions = {
                 series: [{ name: 'حجم', data: volumeData }],
-                chart: { type: 'bar', height: 150, id: 'vol-chart', group: 'stock', toolbar: { show: false }, fontFamily: 'Vazirmatn' },
-                xaxis: { type: 'datetime', labels: { show: false } },
-                yaxis: { labels: { show: false } },
-                colors: ['#94a3b8']
+                chart: { 
+                    type: 'bar', 
+                    height: 180, 
+                    id: 'vol-chart', 
+                    group: 'stock', 
+                    toolbar: { show: false }, 
+                    fontFamily: 'Vazirmatn',
+                    animations: { enabled: false }
+                },
+                xaxis: { 
+                    type: 'datetime', 
+                    labels: { 
+                        formatter: jalaliFormatter,
+                        style: { fontSize: '11px' },
+                        hideOverlappingLabels: true,
+                        rotate: -45
+                    },
+                    axisBorder: { show: true, color: '#e0e0e0' }
+                },
+                yaxis: { 
+                    labels: { 
+                        formatter: (val) => {
+                            if (val >= 1000000000) return (val/1000000000).toFixed(1) + 'B';
+                            if (val >= 1000000) return (val/1000000).toFixed(1) + 'M';
+                            if (val >= 1000) return (val/1000).toFixed(1) + 'K';
+                            return val;
+                        }
+                    },
+                    opposite: true
+                },
+                dataLabels: { enabled: false },
+                plotOptions: {
+                    bar: {
+                        columnWidth: '80%',
+                        distributed: false // Use individual colors from data
+                    }
+                },
+                tooltip: { x: { formatter: jalaliFormatter } }
             };
 
             if (mainChart) mainChart.destroy();
@@ -1454,10 +1620,17 @@
                 }
 
                 const options = {
-                    series: [{ name: key, data: sortedData.map(d => ({ x: new Date(d.date || d.time), y: d[key] })) }],
+                    series: [{ name: key, data: sortedData.map(d => ({ x: new Date(d.date || d.time).getTime(), y: d[key] })) }],
                     chart: { type: 'line', height: 250, toolbar: { show: false }, animations: { enabled: false }, fontFamily: 'Vazirmatn' },
                     stroke: { width: 2, curve: 'smooth' },
-                    xaxis: { type: 'datetime', labels: { show: false } },
+                    xaxis: { 
+                        type: 'datetime', 
+                        labels: { 
+                            show: true,
+                            formatter: jalaliFormatter,
+                            style: { fontSize: '9px' }
+                        } 
+                    },
                     yaxis: { labels: { show: true, style: { fontSize: '10px' } } },
                     colors: ['#2563eb'],
                     annotations: {
@@ -1481,14 +1654,17 @@
             const sortedData = [...data].reverse();
             const options = {
                 series: [
-                    { name: 'خرید حقیقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time), y: d.ct_buy_real_vol || 0 })) },
-                    { name: 'فروش حقیقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time), y: -(d.ct_sell_real_vol || 0) })) },
-                    { name: 'خرید حقوقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time), y: d.ct_buy_legal_vol || 0 })) },
-                    { name: 'فروش حقوقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time), y: -(d.ct_sell_legal_vol || 0) })) }
+                    { name: 'خرید حقیقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time).getTime(), y: d.ct_buy_real_vol || 0 })) },
+                    { name: 'فروش حقیقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time).getTime(), y: -(d.ct_sell_real_vol || 0) })) },
+                    { name: 'خرید حقوقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time).getTime(), y: d.ct_buy_legal_vol || 0 })) },
+                    { name: 'فروش حقوقی', data: sortedData.map(d => ({ x: new Date(d.date || d.time).getTime(), y: -(d.ct_sell_legal_vol || 0) })) }
                 ],
                 chart: { type: 'bar', height: 400, stacked: true, toolbar: { show: true }, fontFamily: 'Vazirmatn' },
                 colors: ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b'],
-                xaxis: { type: 'datetime' },
+                xaxis: { 
+                    type: 'datetime',
+                    labels: { formatter: jalaliFormatter }
+                },
                 yaxis: { labels: { formatter: (val) => Math.abs(val).toLocaleString() } },
                 plotOptions: { bar: { horizontal: false, columnWidth: '80%' } },
                 dataLabels: { enabled: false }
@@ -1510,7 +1686,10 @@
                 series: [{ name: 'قیمت معامله', data: sortedData.map(d => ({ x: d.time, y: parseFloat(d.p || 0) })) }],
                 chart: { type: 'line', height: 400, toolbar: { show: true }, fontFamily: 'Vazirmatn' },
                 stroke: { width: 2, curve: 'stepline' },
-                xaxis: { title: { text: 'زمان' } },
+                xaxis: { 
+                    title: { text: 'زمان' },
+                    labels: { style: { fontFamily: 'Vazirmatn' } }
+                },
                 yaxis: { labels: { formatter: (val) => val.toLocaleString() } },
                 colors: ['#2563eb']
             };
@@ -1711,14 +1890,33 @@
                 }
             } catch (e) {}
         }
-        setInterval(updateMarketStatus, 10000);
+        // setInterval(updateMarketStatus, 10000); // Removed as per user request: No automatic requests
         updateMarketStatus();
 
         // Initialize
         renderWatchlist();
         renderAlerts();
-        // loadHeatmap(); // Removed as per user request
-
+        
+        // Add Clock/Date Logic
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            }).format(now);
+            
+            const timeEl = document.getElementById('current_time');
+            if (timeEl) {
+                timeEl.innerText = timeStr;
+                const dateEl = timeEl.nextElementSibling;
+                if (dateEl) dateEl.innerText = dateStr;
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
 
         function getFilename() {
             const symbol = symbolSelect.value || 'Export';
