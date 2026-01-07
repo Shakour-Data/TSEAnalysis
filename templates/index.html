@@ -608,6 +608,29 @@
                                 * سیستم بر اساس رفتار تاریخی این سهم، اندیکاتورهایی که بیشترین دقت (Accuracy) را در پیش‌بینی حرکت قیمت داشته‌اند رتبه‌بندی کرده است.
                             </div>
                         </div>
+
+                        <!-- 4D Strategy Matrix Table -->
+                        <div id="strategy_matrix_container" class="mt-4 border-top pt-4" style="display: none;">
+                            <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-shield-halved text-success me-1"></i> ماتریس استراتژی ۴ بعدی (شخصیت، ریسک، بازده، افق زمان):</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-hover align-middle text-center small">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th>پروفایل سرمایه‌گذار</th>
+                                            <th>تیپ شخصیتی</th>
+                                            <th>افق زمانی</th>
+                                            <th>نقطه ورود</th>
+                                            <th>حد ضرر (SL)</th>
+                                            <th>حد سود (TP)</th>
+                                            <th>توضیحات استراتژی</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="strategy_matrix_body">
+                                        <!-- Matrix will be injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                         <!-- Chart Container -->
@@ -626,26 +649,11 @@
                         <div class="d-flex justify-content-between align-items-center p-4 bg-white border-bottom">
                             <h4 id="result_title" class="fw-bold mb-0 text-primary">نتایج تحلیل</h4>
                             <div class="d-flex gap-2">
+                                <button id="btn_package" class="btn btn-primary btn-download px-4 py-2">
+                                    <i class="fa-solid fa-file-zipper"></i> دانلود بسته جامع تحلیل (دیتا + نمودار + گزارش)
+                                </button>
                                 <button id="btn_copy" class="btn btn-outline-secondary btn-download">
-                                    <i class="fa-solid fa-copy"></i> کپی
-                                </button>
-                                <button id="btn_image" class="btn btn-warning btn-download text-white">
-                                    <i class="fa-solid fa-image"></i> دانلود عکس نمودار
-                                </button>
-                                <button id="btn_package" class="btn btn-primary btn-download">
-                                    <i class="fa-solid fa-file-zipper"></i> دانلود پکیج کامل (دیتا + نمودار)
-                                </button>
-                                <button id="btn_excel" class="btn btn-success btn-download">
-                                    <i class="fa-solid fa-file-excel"></i> Excel
-                                </button>
-                                <button id="btn_csv" class="btn btn-info btn-download text-white">
-                                    <i class="fa-solid fa-file-csv"></i> CSV
-                                </button>
-                                <button id="btn_pdf" class="btn btn-danger btn-download">
-                                    <i class="fa-solid fa-file-pdf"></i> PDF
-                                </button>
-                                <button id="btn_ai" class="btn btn-dark btn-download">
-                                    <i class="fa-solid fa-microchip"></i> بسته داده AI (JSON)
+                                    <i class="fa-solid fa-copy"></i> کپی متنی
                                 </button>
                             </div>
                         </div>
@@ -1208,6 +1216,21 @@
                         // Default to daily for the table render but respect current toggle for the view
                         renderTable(currentData, currentWeeklyData);
                         switchTimeframe(currentTimeframe);
+
+                        // Fetch Strategy Matrix independently
+                        fetch('/api/ai_package', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                symbol: symbol,
+                                data: currentData,
+                                weekly_data: currentWeeklyData
+                            })
+                        }).then(r => r.json()).then(res => {
+                            if (res.strategy) {
+                                renderStrategyMatrix(res.strategy);
+                            }
+                        }).catch(e => console.error("Strategy Fetch Error:", e));
                     }
                 } else {
                     const response = await fetch('/api/fetch_data', {
@@ -1241,6 +1264,26 @@
             }
         });
 
+        function renderStrategyMatrix(matrix) {
+            const body = document.getElementById('strategy_matrix_body');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            matrix.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold">${row['پروفایل سرمایه‌گذار']}</td>
+                    <td>${row['تیپ شخصیتی']}</td>
+                    <td>${row['افق زمانی']}</td>
+                    <td class="text-primary fw-bold">${typeof row['نقطه ورود'] === 'number' ? row['نقطه ورود'].toLocaleString() : row['نقطه ورود']}</td>
+                    <td class="text-danger fw-bold">${typeof row['حد ضرر (SL)'] === 'number' ? row['حد ضرر (SL)'].toLocaleString() : row['حد ضرر (SL)']}</td>
+                    <td class="text-success fw-bold">${typeof row['حد سود (TP)'] === 'number' ? row['حد سود (TP)'].toLocaleString() : row['حد سود (TP)']}</td>
+                    <td class="text-start small" style="max-width:300px;">${row['توضیحات استراتژی']}</td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
         function renderTable(data, weeklyData = null) {
             if (!data || data.length === 0) { 
                 alert('داده‌ای یافت نشد. ممکن است برای این نماد در بازه زمانی انتخاب شده داده‌ای وجود نداشته باشد.'); 
@@ -1259,12 +1302,14 @@
             const chartContainer = document.getElementById('chart_container');
             const indicatorChartsContainer = document.getElementById('indicator_charts_container');
             const techTabs = document.getElementById('tech_tabs_container');
+            const strategyContainer = document.getElementById('strategy_matrix_container');
             
             if (activeService === 'technical' && data.length > 0) {
                 techSummary.style.display = 'block';
                 chartContainer.style.display = 'block';
                 indicatorChartsContainer.style.display = 'flex';
                 techTabs.style.display = 'flex'; // Use flex for alignment
+                if (strategyContainer) strategyContainer.style.display = 'block';
                 
                 // switchTimeframe is called after renderTable in the click handler
             } else {
@@ -1272,6 +1317,7 @@
                 chartContainer.style.display = 'none';
                 indicatorChartsContainer.style.display = 'none';
                 techTabs.style.display = 'none';
+                if (strategyContainer) strategyContainer.style.display = 'none';
                 
                 if (activeService === 'client_type') {
                     renderClientTypeChart(data);
@@ -1931,78 +1977,20 @@
             return `TSETMC-${symbol}-${today}`;
         }
 
-        async function downloadFile(format) {
+        async function downloadPackage() {
             if (!currentData || currentData.length === 0) {
                 alert('ابتدا داده‌ها را دریافت کنید');
                 return;
             }
 
-            const btnId = format === 'excel' ? 'btn_excel' : (format === 'csv' ? 'btn_csv' : 'btn_image');
-            const btn = document.getElementById(btnId);
+            const btn = document.getElementById('btn_package');
             const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال آماده‌سازی بسته...';
             btn.disabled = true;
 
             try {
-                const filename = getFilename();
-                const response = await fetch('/api/download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        daily_data: currentData, 
-                        weekly_data: currentWeeklyData,
-                        format: format, 
-                        filename: filename,
-                        symbol: symbolSelect.value
-                    })
-                });
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    let ext = '';
-                    if (format === 'excel') ext = 'xlsx';
-                    else if (format === 'image') ext = 'png';
-                    else ext = (currentWeeklyData && currentWeeklyData.length > 0 ? 'zip' : 'csv');
-                    
-                    saveAs(blob, `${filename}.${ext}`);
-                } else {
-                    const err = await response.text();
-                    alert('خطا در دانلود: ' + err);
-                }
-            } catch (e) {
-                console.error(e);
-                alert('خطا در ارتباط با سرور');
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        }
-
-        document.getElementById('btn_copy').addEventListener('click', () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const text = currentData.map(row => Object.values(row).join('\t')).join('\n');
-            navigator.clipboard.writeText(text).then(() => alert('داده‌ها در حافظه کپی شد'));
-        });
-
-        document.getElementById('btn_excel').addEventListener('click', () => downloadFile('excel'));
-        document.getElementById('btn_csv').addEventListener('click', () => downloadFile('csv'));
-        document.getElementById('btn_image').addEventListener('click', () => downloadFile('image'));
-
-        document.getElementById('btn_ai').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const btn = document.getElementById('btn_ai');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال بسته‌بندی...';
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/api/ai_package', {
+                // 1. Get AI Analysis Report first
+                const aiResponse = await fetch('/api/ai_package', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -2011,211 +1999,38 @@
                         weekly_data: currentWeeklyData
                     })
                 });
-                const result = await response.json();
+                const aiResult = await aiResponse.json();
                 
-                if (result.json && result.markdown) {
-                    const zip = new JSZip();
-                    const folder = zip.folder("AI_Data_Package");
-                    
-                    // 1. JSON Data
-                    folder.file("data.json", JSON.stringify(result.json, null, 2));
-                    
-                    // 2. Markdown Report
-                    folder.file("report.md", result.markdown);
-                    
-                    // 3. CSV Data
-                    const sortedDaily = [...result.json.daily].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const wsDaily = XLSX.utils.json_to_sheet(sortedDaily);
-                    folder.file("daily_data.csv", "\ufeff" + XLSX.utils.sheet_to_csv(wsDaily));
-                    
-                    if (result.json.weekly && result.json.weekly.length > 0) {
-                        const sortedWeekly = [...result.json.weekly].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                        const wsWeekly = XLSX.utils.json_to_sheet(sortedWeekly);
-                        folder.file("weekly_data.csv", "\ufeff" + XLSX.utils.sheet_to_csv(wsWeekly));
-                    }
-
-                    // 4. Chart Image
-                    if (result.chart_image) {
-                        folder.file("technical_chart.png", result.chart_image, { base64: true });
-                    }
-
-                    const content = await zip.generateAsync({ type: "blob" });
-                    saveAs(content, `${result.filename}.zip`);
-                    
-                    alert('بسته جامع داده‌های AI (شامل JSON، CSV و گزارش Markdown) دانلود شد. این فایل ZIP را می‌توانید در ChatGPT یا Claude آپلود کنید.');
+                // 2. Request comprehensive ZIP from server
+                const response = await fetch('/api/download_comprehensive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        symbol: symbolSelect.value,
+                        daily_data: currentData, 
+                        weekly_data: currentWeeklyData,
+                        markdown: aiResult.markdown
+                    })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const timestamp = new Date().toISOString().slice(0,10).replace(/-/g, '');
+                    saveAs(blob, `AI_Package_${symbolSelect.value}_${timestamp}.zip`);
                 } else {
-                    alert('خطا در تولید بسته داده');
+                    const err = await response.json();
+                    alert('خطا در تولید بسته: ' + (err.error || 'Unknown error'));
                 }
             } catch (e) {
                 console.error(e);
-                alert('خطا در ارتباط با سرور');
+                alert('خطا در ارتباط با سرور جهت تولید بسته');
             } finally {
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
             }
-        });
+        }
 
-        document.getElementById('btn_pdf').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const symbol = symbolSelect.value || 'Export';
-            
-            const btn = document.getElementById('btn_pdf');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید PDF...';
-
-            try {
-                const canvas = await html2canvas(document.getElementById('result_container'));
-                const imgData = canvas.toDataURL('image/png');
-                const imgProps = doc.getImageProperties(imgData);
-                const pdfWidth = doc.internal.pageSize.getWidth();
-                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                const filename = getFilename();
-                doc.save(`${filename}.pdf`);
-            } catch (e) {
-                console.error(e);
-                alert('خطا در تولید PDF');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
-        });
-
-        document.getElementById('btn_package').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-
-            const btn = document.getElementById('btn_package');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید پکیج...';
-            btn.disabled = true;
-
-            try {
-                const zip = new JSZip();
-                const symbol = symbolSelect.value || 'Export';
-                const today = new Date().toISOString().split('T')[0];
-                
-                // 1. Daily Data
-                const sortedDaily = [...currentData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                const wsDaily = XLSX.utils.json_to_sheet(sortedDaily);
-                const wbDaily = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wbDaily, wsDaily, "Daily");
-                const excelDaily = XLSX.write(wbDaily, { bookType: 'xlsx', type: 'array' });
-                zip.file(`${symbol}_Daily.xlsx`, excelDaily);
-                zip.file(`${symbol}_Daily.csv`, "\ufeff" + XLSX.utils.sheet_to_csv(wsDaily));
-
-                // 2. Weekly Data (if exists)
-                if (currentWeeklyData && currentWeeklyData.length > 0) {
-                    const sortedWeekly = [...currentWeeklyData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const wsWeekly = XLSX.utils.json_to_sheet(sortedWeekly);
-                    const wbWeekly = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wbWeekly, wsWeekly, "Weekly");
-                    const excelWeekly = XLSX.write(wbWeekly, { bookType: 'xlsx', type: 'array' });
-                    zip.file(`${symbol}_Weekly.xlsx`, excelWeekly);
-                    zip.file(`${symbol}_Weekly.csv`, "\ufeff" + XLSX.utils.sheet_to_csv(wsWeekly));
-                }
-
-                // 3. Charts
-                const chartsFolder = zip.folder("Charts");
-                
-                // Helper to render and capture
-                const captureChart = async (options, id) => {
-                    const el = document.getElementById(id);
-                    if (!el) {
-                        const newEl = document.createElement('div');
-                        newEl.id = id;
-                        newEl.style.position = 'absolute';
-                        newEl.style.left = '-9999px';
-                        document.body.appendChild(newEl);
-                    }
-                    const targetEl = document.getElementById(id);
-                    targetEl.innerHTML = '';
-                    const chart = new ApexCharts(targetEl, options);
-                    await chart.render();
-                    await new Promise(r => setTimeout(r, 1200)); // Wait for animations
-                    const result = await chart.dataURI();
-                    const uri = result.imgURI || result.dataUri || result;
-                    chart.destroy();
-                    if (typeof uri === 'string' && uri.includes(',')) {
-                        return uri.split(',')[1];
-                    }
-                    throw new Error(`خطا در تولید تصویر نمودار ${id}`);
-                };
-
-                const generateChartsForData = async (data, prefix) => {
-                    const sorted = [...data].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const folder = chartsFolder.folder(prefix);
-                    
-                    const commonOptions = {
-                        chart: { 
-                            type: 'line', height: 600, width: 1000, 
-                            animations: { enabled: false }, background: '#fff', toolbar: { show: false }
-                        },
-                        xaxis: { 
-                            categories: sorted.map(d => d.date || d.time || ''),
-                            labels: { rotate: -45, style: { fontSize: '12px' } }
-                        },
-                        yaxis: { labels: { formatter: (val) => val ? val.toLocaleString() : val } },
-                        title: { align: 'center', style: { fontSize: '22px', fontWeight: 'bold' } },
-                        stroke: { width: 3, curve: 'smooth' }
-                    };
-
-                    // Candlestick
-                    if (sorted[0].open && sorted[0].close) {
-                        const candleData = sorted.map(d => ({
-                            x: d.date || d.time,
-                            y: [d.open, d.high, d.low, d.close]
-                        }));
-                        const options = {
-                            ...commonOptions,
-                            chart: { ...commonOptions.chart, type: 'candlestick' },
-                            title: { ...commonOptions.title, text: `${symbol} (${prefix})` },
-                            series: [{ data: candleData }]
-                        };
-                        const img = await captureChart(options, 'chart_export_tmp');
-                        folder.file(`${symbol}_Candlestick.png`, img, { base64: true });
-                    }
-
-                    // Indicators
-                    const baseKeys = ['date', 'time', 'open', 'high', 'low', 'close', 'volume', 'l18', 'l30', 'isin', 'cs', 'cs_id', 'eps', 'pe', 'pc', 'pcc', 'pcp', 'pmin', 'pmax', 'count', 'Signal', 'Pattern'];
-                    const indicatorKeys = Object.keys(sorted[0]).filter(k => !baseKeys.includes(k) && typeof sorted[0][k] === 'number');
-                    
-                    for (const key of indicatorKeys) {
-                        const options = {
-                            ...commonOptions,
-                            title: { ...commonOptions.title, text: `${key} (${prefix})` },
-                            series: [{ name: key, data: sorted.map(d => d[key]) }]
-                        };
-                        const img = await captureChart(options, 'chart_export_tmp');
-                        folder.file(`${key}.png`, img, { base64: true });
-                    }
-                };
-
-                await generateChartsForData(currentData, "Daily");
-                if (currentWeeklyData && currentWeeklyData.length > 0) {
-                    await generateChartsForData(currentWeeklyData, "Weekly");
-                }
-
-                // 5. Finalize ZIP
-                const content = await zip.generateAsync({ type: "blob" });
-                saveAs(content, `Analysis_${symbol}_${today}.zip`);
-
-            } catch (e) {
-                console.error(e);
-                alert('خطا در تولید پکیج: ' + e.message);
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        });
+        document.getElementById('btn_package').addEventListener('click', downloadPackage);
     </script>
     <!-- Stats Modal -->
     <div class="modal fade" id="statsModal" tabindex="-1">

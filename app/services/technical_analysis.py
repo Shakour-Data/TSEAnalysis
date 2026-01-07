@@ -436,7 +436,8 @@ class TechnicalAnalyzer:
 
     @classmethod
     @classmethod
-    def generate_chart_image(cls, data, symbol_name):
+    @classmethod
+    def generate_chart_image(cls, data, symbol_name, timeframe='daily'):
         try:
             if not data: return None
             df = pd.DataFrame(data)
@@ -446,7 +447,12 @@ class TechnicalAnalyzer:
             if 'date' in df_plot.columns:
                 df_plot['date'] = pd.to_datetime(df_plot['date'])
                 df_plot.set_index('date', inplace=True)
-            df_plot = df_plot.sort_index().tail(100)
+            
+            # Use last 100 points for plot if not already limited
+            if len(df_plot) > 100:
+                df_plot = df_plot.sort_index().tail(100)
+            else:
+                df_plot = df_plot.sort_index()
             
             for c in ['open', 'high', 'low', 'close', 'volume']:
                 if c in df_plot.columns:
@@ -478,11 +484,14 @@ class TechnicalAnalyzer:
             mc = mpf.make_marketcolors(up='g', down='r', inherit=True)
             s = mpf.make_mpf_style(marketcolors=mc, gridstyle=':', y_on_right=False)
             
+            timeframe_label = "Weekly" if timeframe == 'weekly' else "Daily"
+            tf_fa = "هفتگی" if timeframe == 'weekly' else "روزانه"
+            
             # Create subplots for better control
             fig, axes = mpf.plot(df_plot, type='candle', style=s, volume=True, 
                                  addplot=apds,
                                  hlines=dict(hlines=hlines, colors=colors, linestyle='-.', alpha=0.4),
-                                 title=f"Advanced Analysis: {symbol_name}",
+                                 title=f"Technical Analysis ({tf_fa}): {symbol_name}",
                                  ylabel='Price', ylabel_lower='Volume',
                                  returnfig=True, figsize=(15, 12),
                                  panel_ratios=(6, 2, 2, 2)) # Increased volume panel height
@@ -522,3 +531,53 @@ class TechnicalAnalyzer:
         except Exception as e:
             print(f"Chart error: {e}")
             return None
+
+    @staticmethod
+    def generate_strategy_matrix(current_price, supports, resistances):
+        """
+        Generates a strategy matrix based on 4 dimensions:
+        1. Personality: Real, Legal
+        2. Risk: Aggressive, Neutral, Cautious
+        3. Return: Defensive, Balanced, Offensive
+        4. Horizon: Short, Medium, Long
+        """
+        if not current_price or not supports or not resistances:
+            return []
+
+        strategies = []
+        
+        # Helper to get levels
+        s1 = supports[0]['value'] if len(supports) > 0 else current_price * 0.95
+        s2 = supports[1]['value'] if len(supports) > 1 else s1 * 0.95
+        r1 = resistances[0]['value'] if len(resistances) > 0 else current_price * 1.05
+        r2 = resistances[1]['value'] if len(resistances) > 1 else r1 * 1.05
+        r3 = resistances[2]['value'] if len(resistances) > 2 else r2 * 1.10
+
+        # Define 12 reasonable archetypes (covering the 54-state space meaningfully)
+        archetypes = [
+            # 1. Personality | Risk | Return | Horizon
+            ("حقیقی", "جسور", "تهاجمی", "کوتاه مدت", "نوسان‌گیری سریع (Scalping)", f"خرید در {s1} - تریگر: واگرایی مثبت RSI", r1, s2, "ورود پله‌ای در حمایت‌های نزدیک"),
+            ("حقیقی", "جسور", "تهاجمی", "میان مدت", "معاملات تکانه‌ای (Momentum)", f"خرید در شکست {r1} - تریگر: حجم بالا", r2, s1, "تعقیب روند با حد ضرر شناور"),
+            ("حقیقی", "خنثی", "متعادل", "کوتاه مدت", "نوسان‌گیری کانالی", f"خرید در {s1} - تریگر: کندل برگشتی", r1, s2, "خرید در کف و فروش در سقف کانال"),
+            ("حقیقی", "خنثی", "متعادل", "میان مدت", "معاملات روندی (Trend Following)", f"خرید در تثبیت بالای SMA20", r2, s1, "صبر برای تایید روند و حفظ موقعیت"),
+            ("حقیقی", "محتاط", "تدافعی", "میان مدت", "سرمایه‌گذاری کم‌ریسک", f"خرید در {s1} - تریگر: اشباع فروش RSI", r1, s2, "تمرکز بر حفظ اصل سرمایه"),
+            ("حقیقی", "محتاط", "تدافعی", "بلند مدت", "ارزش‌محور (Value Investing)", f"خرید در {s2} - تریگر: نزدیکی به کف تاریخی", r2, s1, "نادیده گرفتن نوسانات موقت"),
+            ("حقوقی", "خنثی", "ارزشمند", "بلند مدت", "استراتژی انباشت (Accumulation)", f"خرید پله‌ای در محدوده {s1} تا {s2}", r3, s2 * 0.9, "ورود سنگین در نواحی حمایتی معتبر"),
+            ("حقوقی", "محتاط", "تدافعی", "بلند مدت", "مدیریت ثروت (Wealth Mgmt)", f"خرید در {s2} - تریگر: نسبت P/E تاریخی", r2, s2 * 0.85, "رویکرد صبورانه و خروج در سقف‌های قیمتی"),
+            ("حقیقی", "جسور", "متعادل", "کوتاه مدت", "معاملات خبری (Event Driven)", f"خرید در {current_price} - تریگر: اخبار رانتی/بنیادی", r1, current_price * 0.94, "ورود سریع و خروج با سود معقول"),
+            ("حقوقی", "جسور", "تهاجمی", "میان مدت", "بازارگردانی/حمایت", f"خرید در محدوده {s1}", r1, s2, "کنترل قیمت و جمع‌آوری سهم"),
+            ("حقیقی", "خنثی", "تهاجمی", "بلند مدت", "رشد‌محور (Growth)", f"خرید در {s1} - تریگر: گزارشات ماهانه مثبت", r3, s2, "سرمایه‌گذاری در شرکت‌های با پتانسیل رشد بالا"),
+            ("حقیقی", "محتاط", "متعادل", "بلند مدت", "سرمایه‌گذاری سنتی", f"خرید در {s1} - تریگر: تثبیت در کف", r2, s2, "تنوع‌بخشی به پرتفوی و دوری از هیجان")
+        ]
+
+        for p, risk, ret, hor, style, entry, target, sl, desc in archetypes:
+            strategies.append({
+                "dimension": f"{p} - {risk} - {ret} - {hor}",
+                "style": style,
+                "entry": entry,
+                "target": f"{int(target):,}",
+                "stop_loss": f"{int(sl):,}",
+                "trigger": desc
+            })
+            
+        return strategies

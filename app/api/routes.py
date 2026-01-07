@@ -7,6 +7,7 @@ import os
 import io
 import pandas as pd
 import base64
+import zipfile
 
 from app.services.tsetmc import client
 from app.services.technical_analysis import TechnicalAnalyzer
@@ -121,13 +122,40 @@ def fetch_data():
 
     if service_type == 'technical' and isinstance(result, list) and len(result) > 0:
         result = TechnicalAnalyzer.prepare_ohlcv_data(result)
-        if timeframe == 'weekly': result = TechnicalAnalyzer.resample_to_weekly(result)
-        result = TechnicalAnalyzer.calculate_technical_analysis(result)
-        if len(result) > 20:
+        
+        # Apply Date Range Filtering
+        if (start_date or end_date) and result:
             try:
-                buf = TechnicalAnalyzer.generate_chart_image(result, symbol)
+                # If weekly, expand the range 5x backwards as per user requirement
+                final_start = start_date
+                if timeframe == 'weekly' and start_date and end_date:
+                    s_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                    e_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                    diff = e_dt - s_dt
+                    expanded_start = e_dt - (diff * 5)
+                    final_start = expanded_start.strftime('%Y-%m-%d')
+                
+                filtered = []
+                for item in result:
+                    item_date = item.get('date', '')[:10]
+                    if final_start and item_date < final_start: continue
+                    if end_date and item_date > end_date: continue
+                    filtered.append(item)
+                result = filtered
+            except Exception as e:
+                print(f"Date Filter Error: {e}")
+
+        if timeframe == 'weekly': 
+            result = TechnicalAnalyzer.resample_to_weekly(result)
+            
+        result = TechnicalAnalyzer.calculate_technical_analysis(result)
+        
+        if len(result) > 5: # Reduced minimum for better visibility
+            try:
+                buf = TechnicalAnalyzer.generate_chart_image(result, symbol, timeframe=timeframe)
                 if buf: result[0]['chart_image'] = base64.b64encode(buf.getvalue()).decode('utf-8')
-            except: pass
+            except Exception as e:
+                print(f"Chart Generation Error: {e}")
 
     if result and isinstance(result, list) and candle_count:
         try: result = result[:int(candle_count)]
@@ -144,17 +172,122 @@ def generate_ai_package():
     weekly_data = data.get('weekly_data', [])
     if not tech_data: return jsonify({"error": "داده‌ای یافت نشد."})
     latest = tech_data[0]
-    report = f"# Technical Analysis Report: {symbol}\n**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-    return jsonify({"json": {"daily": tech_data, "weekly": weekly_data}, "markdown": report, "filename": f"AI_Package_{symbol}"})
+    
+    # Generate Strategy Matrix
+    supports = latest.get('supports', [])
+    resistances = latest.get('resistances', [])
+    current_price = latest.get('close', 0)
+    
+    strategies = []
+    strategy_table = ""
+    try:
+        strategies = TechnicalAnalyzer.generate_strategy_matrix(current_price, supports, resistances)
+        strategy_table = "\n### 📊 ماتریس استراتژی معاملاتی (۴ بعدی)\n"
+        strategy_table += "| ابعاد (شخصیت-ریسک-بازده-افق) | شیوه معاملاتی | نقطه ورود و تریگر | حد سود | حد ضرر | توضیحات فنی |\n"
+        strategy_table += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        for s in strategies:
+            strategy_table += f"| {s['dimension']} | {s['style']} | {s['entry']} | {s['target']} | {s['stop_loss']} | {s['trigger']} |\n"
+    except Exception as e:
+        print(f"Strategy Matrix Error: {e}")
+
+    report = f"# گزارش تحلیل تکنیکال هوشمند: {symbol}\n"
+    report += f"**تاریخ گزارش:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+    report += f"### 🔍 وضعیت فعلی\n- **قیمت آخرین معامله:** {int(current_price):,}\n"
+    report += f"- **سیگنال اندیکاتورها:** {latest.get('Signal', 'Neutral')}\n"
+    report += f"- **الگوی شمعی:** {latest.get('Pattern', 'None')}\n\n"
+    
+    report += strategy_table
+    
+    return jsonify({
+        "json": {
+            "daily": tech_data, 
+            "weekly": weekly_data,
+            "strategies": strategies
+        }, 
+        "markdown": report, 
+        "filename": f"AI_Package_{symbol}"
+    })
+
+@main_bp.route('/api/download_comprehensive', methods=['POST'])
+def download_comprehensive():
+    try:
+        data = request.json
+        symbol = data.get('symbol', 'Unknown')
+        daily_data = data.get('daily_data', [])
+        weekly_data = data.get('weekly_data', [])
+        report_md = data.get('markdown', '')
+
+        if not daily_data:
+            return jsonify({"error": "داده‌ای برای دانلود وجود ندارد."}), 400
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED, False) as zip_file:
+            # 1. Daily Data Excel
+            df_daily = pd.DataFrame(daily_data)
+            # Ensure proper sort for excel
+            if 'date' in df_daily.columns:
+                df_daily = df_daily.sort_values('date', ascending=False)
+            
+            excel_daily = io.BytesIO()
+            with pd.ExcelWriter(excel_daily, engine='xlsxwriter') as writer:
+                df_daily.to_excel(writer, index=False, sheet_name='Daily Analysis')
+                # Add basic formatting
+                workbook = writer.book
+                worksheet = writer.sheets['Daily Analysis']
+                header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC', 'border': 1})
+                for col_num, value in enumerate(df_daily.columns.values):
+                    worksheet.write(0, col_num, value, header_format)
+            
+            zip_file.writestr(f"1-Daily_Data_{symbol}.xlsx", excel_daily.getvalue())
+
+            # 2. Weekly Data Excel
+            if weekly_data:
+                df_weekly = pd.DataFrame(weekly_data)
+                if 'date' in df_weekly.columns:
+                    df_weekly = df_weekly.sort_values('date', ascending=False)
+                
+                excel_weekly = io.BytesIO()
+                with pd.ExcelWriter(excel_weekly, engine='xlsxwriter') as writer:
+                    df_weekly.to_excel(writer, index=False, sheet_name='Weekly Analysis')
+                zip_file.writestr(f"2-Weekly_Data_{symbol}.xlsx", excel_weekly.getvalue())
+
+            # 3. Daily Chart
+            chart_daily = TechnicalAnalyzer.generate_chart_image(daily_data, symbol, timeframe='daily')
+            if chart_daily:
+                zip_file.writestr(f"3-Chart_Daily_{symbol}.png", chart_daily.getvalue())
+
+            # 4. Weekly Chart
+            if weekly_data:
+                # Need to calculate technical if not already there, or just use the data
+                chart_weekly = TechnicalAnalyzer.generate_chart_image(weekly_data, symbol, timeframe='weekly')
+                if chart_weekly:
+                    zip_file.writestr(f"4-Chart_Weekly_{symbol}.png", chart_weekly.getvalue())
+
+            # 5. Markdown Report
+            if report_md:
+                # Add a UTF-8 BOM for Windows compatibility if needed, or just plain text
+                zip_file.writestr(f"5-Full_Analysis_Report_{symbol}.md", report_md.encode('utf-8'))
+
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"AI_Package_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+        )
+    except Exception as e:
+        print(f"Comprehensive Download Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @main_bp.route('/api/download', methods=['POST'])
 def download():
     data = request.json
     daily_data = data.get('daily_data') or data.get('data')
     symbol, fmt = data.get('symbol', 'Symbol'), data.get('format')
+    timeframe = data.get('timeframe', 'daily')
     if fmt == 'image' and daily_data:
         df = pd.DataFrame(daily_data)
         if 'date' in df.columns: df = df.sort_values('date')
-        buf = TechnicalAnalyzer.generate_chart_image(df, symbol)
+        buf = TechnicalAnalyzer.generate_chart_image(df, symbol, timeframe=timeframe)
         return send_file(buf, download_name=f"{symbol}.png", as_attachment=True, mimetype='image/png')
     return jsonify({"error": "Format not supported"}), 400
