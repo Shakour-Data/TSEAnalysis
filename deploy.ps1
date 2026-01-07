@@ -54,7 +54,7 @@ if (!(Test-Path "tse_data.db")) {
 Write-Header "Network Connectivity Check"
 # Testing brsapi.ir accessibility
 try {
-    $null = Invoke-WebRequest -Uri "https://brsapi.ir" -Method Head -TimeoutSec 5 -ErrorAction Stop
+    [void](Invoke-WebRequest -Uri "https://brsapi.ir" -Method Head -TimeoutSec 5 -ErrorAction Stop)
     Write-Host "Success: BrsApi.ir is reachable." -ForegroundColor Green
 } catch {
     Write-Host "WARNING: BrsApi.ir might be blocked in this environment." -ForegroundColor Yellow
