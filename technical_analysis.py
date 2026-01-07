@@ -490,19 +490,21 @@ class TechnicalAnalyzer:
             # Shamsi date conversion for X-axis
             def to_jalali(x, pos):
                 try:
-                    # mdates.num2date returns a datetime object
-                    dt = mdates.num2date(x)
-                    j_dt = jdatetime.date.fromgregorian(date=dt.date())
-                    return j_dt.strftime('%y/%m/%d')
-                except:
+                    # Check if x is within bounds of the dataframe index
+                    idx = int(round(x))
+                    if 0 <= idx < len(df_plot):
+                        dt = df_plot.index[idx]
+                        j_dt = jdatetime.date.fromgregorian(date=dt.date())
+                        return j_dt.strftime('%y/%m/%d')
+                    return ""
+                except Exception as e:
                     return ""
 
-            # Apply Jalali formatter to the price axis (the bottom-most axis with labels)
-            # In mpf.plot with volume=True and panels, axes[-2] is usually the volume, axes[0] price
-            # We want to format the bottom-most axis that has the date labels.
+            # Apply Jalali formatter to the price axis
             for ax in axes:
-                if ax.texts or ax.get_xlabel() or True: # Try applying to the one with x-labels
-                    ax.xaxis.set_major_formatter(plt.FuncFormatter(to_jalali))
+                # In mplfinance, usually the last axis with labels is the one we want
+                # or we can check if it has a major formatter that we can override
+                ax.xaxis.set_major_formatter(plt.FuncFormatter(to_jalali))
             
             # Adjust date label spacing
             fig.autofmt_xdate()
