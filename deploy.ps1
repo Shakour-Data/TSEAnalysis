@@ -1,8 +1,8 @@
 # TSEAnalysis Deployment Script for Windows
 # This script automates: Venv creation, dependency installation, and server startup.
 
-function Write-Header($msg) {
-    Write-Host "`n==== $msg ====" -ForegroundColor Cyan
+function Write-Header($headerMsg) {
+    Write-Host "`n==== $headerMsg ====" -ForegroundColor Cyan
 }
 
 Write-Header "Checking System Requirements"
@@ -14,8 +14,8 @@ if (!(Get-Command python -ErrorAction SilentlyContinue)) {
     exit
 }
 
-$pythonVersion = python --version
-Write-Host "Found $pythonVersion"
+$pyVer = python --version
+Write-Host "Found $pyVer"
 
 # 2. Virtual Environment Setup
 if (!(Test-Path "venv")) {
@@ -54,7 +54,7 @@ if (!(Test-Path "tse_data.db")) {
 Write-Header "Network Connectivity Check"
 # Testing brsapi.ir accessibility
 try {
-    $res = Invoke-WebRequest -Uri "https://brsapi.ir" -Method Head -TimeoutSec 5 -ErrorAction Stop
+    $null = Invoke-WebRequest -Uri "https://brsapi.ir" -Method Head -TimeoutSec 5 -ErrorAction Stop
     Write-Host "Success: BrsApi.ir is reachable." -ForegroundColor Green
 } catch {
     Write-Host "WARNING: BrsApi.ir might be blocked in this environment." -ForegroundColor Yellow
@@ -65,7 +65,7 @@ Write-Header "Deployment Complete"
 Write-Host "To start the server, run: python app.py" -ForegroundColor Green
 Write-Host "The dashboard will be available at: http://127.0.0.1:5000"
 
-$choice = Read-Host "`nDo you want to start the server now? (Y/N)"
-if ($choice -eq "Y" -or $choice -eq "y") {
+$startChoice = Read-Host "`nDo you want to start the server now? (Y/N)"
+if ($startChoice -eq "Y" -or $startChoice -eq "y") {
     python app.py
 }
