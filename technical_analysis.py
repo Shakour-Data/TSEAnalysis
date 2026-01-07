@@ -5,6 +5,8 @@ import mplfinance as mpf
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import jdatetime
 import io
 import base64
 import random
@@ -100,8 +102,9 @@ class TechnicalAnalyzer:
         
         standardized = []
         for item in data:
-            # Map BrsApi historical keys (pc, pf, pmax, pmin, tvol) to standard OHLCV
-            close = item.get('pc') or item.get('close') or item.get('value')
+            # Map BrsApi historical keys (pc, pf, pmax, pmin, tvol, index) to standard OHLCV
+            # 'pc' = Previous Close/Close, 'pf' = First/Open, 'index' = Index value
+            close = item.get('pc') or item.get('close') or item.get('index') or item.get('value')
             open_p = item.get('pf') or item.get('open') or close
             high = item.get('pmax') or item.get('high') or close
             low = item.get('pmin') or item.get('low') or close
@@ -292,7 +295,7 @@ class TechnicalAnalyzer:
 
     @classmethod
     def calculate_technical_analysis(cls, data, index_data=None):
-        if not data or not isinstance(data, list) or len(data) < 30:
+        if not data or not isinstance(data, list) or len(data) < 10:
             return data
 
         df = pd.DataFrame(data)
@@ -305,23 +308,47 @@ class TechnicalAnalyzer:
 
         try:
             # Trend & Momentum
-            df['SMA20'] = ta.trend.sma_indicator(df['close'], window=20)
-            df['SMA50'] = ta.trend.sma_indicator(df['close'], window=50)
-            df['MACD'] = ta.trend.macd(df['close'])
-            df['MACD_Sig'] = ta.trend.macd_signal(df['close'])
-            df['RSI'] = ta.momentum.rsi(df['close'], window=14)
-            df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])
+            if len(df) >= 20:
+                df['SMA20'] = ta.trend.sma_indicator(df['close'], window=20)
+                df['BBU'] = ta.volatility.bollinger_hband(df['close'], window=20)
+                df['BBL'] = ta.volatility.bollinger_lband(df['close'], window=20)
+            else:
+                df['SMA20'] = df['close'].rolling(window=min(len(df), 5)).mean()
+                df['BBU'] = None
+                df['BBL'] = None
+
+            if len(df) >= 50:
+                df['SMA50'] = ta.trend.sma_indicator(df['close'], window=50)
+            else:
+                df['SMA50'] = None
+
+            if len(df) >= 26:
+                df['MACD'] = ta.trend.macd(df['close'])
+                df['MACD_Sig'] = ta.trend.macd_signal(df['close'])
+            else:
+                df['MACD'] = None
+                df['MACD_Sig'] = None
+
+            if len(df) >= 14:
+                df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+                df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])
+                df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
+            else:
+                df['RSI'] = None
+                df['ADX'] = None
+                df['ATR'] = None
 
             # Ichimoku
-            df['Ichimoku_A'] = ta.trend.ichimoku_a(df['high'], df['low'])
-            df['Ichimoku_B'] = ta.trend.ichimoku_b(df['high'], df['low'])
-            df['Ichimoku_Base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])
-            df['Ichimoku_Conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])
-
-            # Volatility
-            df['BBU'] = ta.volatility.bollinger_hband(df['close'], window=20)
-            df['BBL'] = ta.volatility.bollinger_lband(df['close'], window=20)
-            df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
+            if len(df) >= 52:
+                df['Ichimoku_A'] = ta.trend.ichimoku_a(df['high'], df['low'])
+                df['Ichimoku_B'] = ta.trend.ichimoku_b(df['high'], df['low'])
+                df['Ichimoku_Base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])
+                df['Ichimoku_Conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])
+            else:
+                df['Ichimoku_A'] = None
+                df['Ichimoku_B'] = None
+                df['Ichimoku_Base'] = None
+                df['Ichimoku_Conv'] = None
 
             # Beta calculation if index_data is provided
             beta_val = None
@@ -451,13 +478,34 @@ class TechnicalAnalyzer:
             mc = mpf.make_marketcolors(up='g', down='r', inherit=True)
             s = mpf.make_mpf_style(marketcolors=mc, gridstyle=':', y_on_right=False)
             
+            # Create subplots for better control
             fig, axes = mpf.plot(df_plot, type='candle', style=s, volume=True, 
                                  addplot=apds,
                                  hlines=dict(hlines=hlines, colors=colors, linestyle='-.', alpha=0.4),
                                  title=f"Advanced Analysis: {symbol_name}",
                                  ylabel='Price', ylabel_lower='Volume',
                                  returnfig=True, figsize=(15, 12),
-                                 panel_ratios=(6, 1.5, 1.5, 1.5))
+                                 panel_ratios=(6, 2, 2, 2)) # Increased volume panel height
+
+            # Shamsi date conversion for X-axis
+            def to_jalali(x, pos):
+                try:
+                    # mdates.num2date returns a datetime object
+                    dt = mdates.num2date(x)
+                    j_dt = jdatetime.date.fromgregorian(date=dt.date())
+                    return j_dt.strftime('%y/%m/%d')
+                except:
+                    return ""
+
+            # Apply Jalali formatter to the price axis (the bottom-most axis with labels)
+            # In mpf.plot with volume=True and panels, axes[-2] is usually the volume, axes[0] price
+            # We want to format the bottom-most axis that has the date labels.
+            for ax in axes:
+                if ax.texts or ax.get_xlabel() or True: # Try applying to the one with x-labels
+                    ax.xaxis.set_major_formatter(plt.FuncFormatter(to_jalali))
+            
+            # Adjust date label spacing
+            fig.autofmt_xdate()
             
             ax_price = axes[0]
             for val, label, color in zip(hlines, hlabels, colors):
