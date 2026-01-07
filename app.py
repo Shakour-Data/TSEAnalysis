@@ -5,7 +5,7 @@ import subprocess
 import ssl
 import socket
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_file
@@ -81,6 +81,11 @@ BASE_URL = "https://brsapi.ir"
 # Examples: "http://user:pass@host:port" or "socks5://host:port"
 # If you have a local v2ray/xray running on 1080: "socks5://127.0.0.1:1080"
 PROXY_URL = None # DEFAULT: NO PROXY
+
+# ===== CLOUDFLARE/GOOGLE BRIDGE (FOR FOREIGN SERVERS) =====
+# Use this if you are in France/Europe and getting "Connection Reset 10054"
+# Create a Worker or Apps Script and put the URL here.
+BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxyrNakdMLbd8YsUAIYfgA9E5cP_66MNGkoTekIdC4FQhFcf-0p8n1CXqrDuWJBiE4w/exec" 
 
 REQUEST_USAGE_LIMIT = 1.0  # Allow all requests
 
@@ -446,6 +451,20 @@ class TSETMCClient:
         for protocol in protocols:
             url = f"{protocol}://brsapi.ir/{endpoint}"
             full_url = f"{url}?{urlencode(query, doseq=True)}"
+            
+            # --- Technique 0: Cloudflare/Google Bridge ---
+            # If BRIDGE_URL is set, we bypass EVERYTHING and go through the bridge.
+            if BRIDGE_URL:
+                try:
+                    bridge_request_url = f"{BRIDGE_URL}?url={quote(full_url)}"
+                    print(f"DEBUG: Using Bridge for {protocol.upper()}...")
+                    resp = requests.get(bridge_request_url, timeout=30)
+                    if resp.status_code == 200:
+                        self._consecutive_failures = 0
+                        if service: update_stats(service, "success")
+                        return resp.json()
+                except Exception as e:
+                    print(f"DEBUG: Bridge failed: {str(e)[:40]}")
 
             for attempt in range(current_max):
                 tech_variant = attempt % 3 # 0: Curl, 1: TLS/CFFI, 2: Requests
@@ -694,33 +713,37 @@ class TSETMCClient:
         elif market_type == "indices_market":
             lists = []
             errors = []
-            # Note: Index.php type 1/2 returns a single dict, type 3 returns a list.
+            # Note: Index.php type 1/2 returns a single dict (or list with 1 item), type 3 returns a list.
             # We fetch 1 and 2 for major indices, then 3 for the rest
             for idx_type, prefix in (("1", "بورس"), ("2", "فرابورس"), ("3", "سایر")):
-                data = self.get_indices(idx_type, force_refresh=force_refresh)
-                
-                if isinstance(data, list):
-                    for i, item in enumerate(data):
-                        name = item.get('l18') or item.get('name') or "نامشخص"
+                try:
+                    data = self.get_indices(idx_type, force_refresh=force_refresh)
+                    
+                    if isinstance(data, list):
+                        for i, item in enumerate(data):
+                            name = item.get('l18') or item.get('name') or "نامشخص"
+                            lists.append({
+                                "id": f"idx_{idx_type}_{i}", 
+                                "l18": name, 
+                                "l30": item.get('l30') or f"شاخص {prefix} {name}"
+                            })
+                    elif isinstance(data, dict) and "error" not in data:
+                        name = data.get('l18') or data.get('name') or (f"شاخص کل {prefix}")
                         lists.append({
-                            "id": f"idx_{idx_type}_{i}", 
+                            "id": f"idx_{idx_type}_main", 
                             "l18": name, 
-                            "l30": item.get('l30') or f"شاخص {prefix} {name}"
+                            "l30": data.get('l30') or f"شاخص {prefix} {name}"
                         })
-                elif isinstance(data, dict) and "error" not in data:
-                    name = data.get('l18') or data.get('name') or (f"شاخص کل {prefix}")
-                    lists.append({
-                        "id": f"idx_{idx_type}_main", 
-                        "l18": name, 
-                        "l30": data.get('l30') or f"شاخص {prefix} {name}"
-                    })
-                elif isinstance(data, dict):
-                    errors.append(data)
+                    elif isinstance(data, dict) and "error" in data:
+                        # Log error but don't stop if we have other data
+                        print(f"DEBUG: Index Type {idx_type} returned error: {data['error']}")
+                except Exception as e:
+                    print(f"DEBUG: Critical error fetching index type {idx_type}: {e}")
             
             if lists:
                 result_symbols = lists
             else:
-                result_symbols = errors[0] if errors else {"error": "دریافت شاخص‌ها با خطا مواجه شد."}
+                result_symbols = {"error": "دریافت شاخص‌ها با خطا مواجه شد. لطفاً دوباره تلاش کنید."}
 
         elif market_type == "indices_industry":
              # ... existing logic ...
@@ -763,40 +786,130 @@ class TSETMCClient:
 
     def get_price_history(self, symbol, data_type=0, adjusted=True, service=None, force_refresh=False):
         """
-        User-Commanded History Fetcher (STRICTLY FORCES ADJUSTED DATA FOR DB STORAGE).
-        1. Checks DB first.
-        2. If force_refresh OR DB Empty, fetches from API (Forces adjusted=True).
-        3. Saves NEW records to DB.
-        4. Returns data ONLY from DB to ensure technical analysis uses adjusted cached records.
+        User-Commanded History Fetcher.
         """
-        # We always use the same key because we only store adjusted data
         db_key = f"{symbol}_{data_type}"
+        if adjusted and data_type == 0:
+            db_key = f"{symbol}_adj_{data_type}"
         
-        # Check SQLite storage
         cached_data = db.get_history(db_key)
-        
         should_fetch = force_refresh or not cached_data
         
         if should_fetch:
-            print(f"DEBUG: Command received - Fetching fresh ADJUSTED history for {symbol}")
-            api_data = self._make_request("Api/Tsetmc/History.php", {
-                "l18": symbol,
-                "type": data_type,
-                "adjusted": "true"  # <--- FORCE TRUE: We only store adjusted data
-            }, service=service)
+            print(f"DEBUG: Processing history for {symbol} (Adjusted: {adjusted})")
+            
+            # 1. Market Index Proxy Fallback
+            if symbol in ["شاخص کل", "شاخص کل (هم وزن)", "شاخص کل فرابورس"]:
+                market_type = "1" if "فرابورس" not in symbol else "2"
+                is_equal_weight = "هم وزن" in symbol
+                # Use a specific top-weighted proxy for major indices
+                api_data = self.get_market_proxy_history(market_type, top_count=30, adjusted=False, weighted=not is_equal_weight)
+            
+            # 2. Industry Index Fallback (If name matches an industry)
+            elif "شاخص صنعت" in str(symbol) or str(symbol).endswith("صنعت"):
+                sector_name = symbol.replace("شاخص صنعت ", "").replace("شاخص ", "").replace(" صنعت", "").strip()
+                api_data = self.get_sector_history(sector_name, top_count=10, adjusted=adjusted)
+            
+            # 3. Explicit check for known sectors if not caught by "industry" keyword
+            elif any(s == symbol for s in ["خودرو", "بانكها", "فلزات اساسي", "شيميايي", "فرآورده هاي نفتي"]):
+                 api_data = self.get_sector_history(symbol, top_count=10, adjusted=adjusted)
+
+            elif data_type == 0:
+                # Standard tradable symbol history
+                api_params = {"l18": symbol, "adjusted": str(adjusted).lower()}
+                api_data = self._make_request("Api/Tsetmc/Candlestick.php", api_params, service=service)
+                
+                if isinstance(api_data, dict):
+                    potential_keys = ['candle_daily', 'candle_daily_adjusted', 'candles', 'history']
+                    for k in potential_keys:
+                        if k in api_data and isinstance(api_data[k], list):
+                            api_data = api_data[k]
+                            break
+            else:
+                api_data = self._make_request("Api/Tsetmc/History.php", {"l18": symbol, "type": data_type}, service=service)
             
             if isinstance(api_data, list) and api_data:
-                # Save to DB (INSERT OR IGNORE handles new data only)
                 db.save_history(db_key, api_data)
-                # Always re-read from DB to be the single source of truth
                 cached_data = db.get_history(db_key)
             elif isinstance(api_data, dict) and "error" in api_data and not cached_data:
                 return api_data
         
-        if cached_data:
-            return cached_data
+        return cached_data if cached_data else {"error": f"تاریخچه دیتا برای {symbol} یافت نشد."}
+
+    def get_sector_history(self, sector_name, top_count=10, adjusted=True):
+        """Calculates a proxy index for an industry based on its top symbols."""
+        try:
+            # Get symbols for this sector from local DB
+            # We assume DB is populated by background silence or previous calls
+            d1 = self.get_all_symbols("1")
+            d2 = self.get_all_symbols("2")
+            data = []
+            if isinstance(d1, list): data.extend(d1)
+            if isinstance(d2, list): data.extend(d2)
             
-        return {"error": f"تاریخچه قیمتی برای {symbol} یافت نشد."}
+            sector_symbols = [s for s in data if s.get('cs') == sector_name]
+            if not sector_symbols:
+                return {"error": f"نمادی در صنعت {sector_name} برای محاسبه شاخص یافت نشد."}
+                
+            top_symbols = sorted(sector_symbols, key=lambda x: float(x.get('mv') or x.get('v') or 0), reverse=True)[:top_count]
+            return self._calculate_aggregate_history(top_symbols, adjusted, weighted=True)
+        except Exception as e:
+            return {"error": f"خطا در محاسبه شاخص صنعت: {e}"}
+
+    def get_market_proxy_history(self, market_type, top_count=30, adjusted=False, weighted=True):
+        """Calculates a proxy for the total market index using top market-cap symbols."""
+        try:
+            data = self.get_all_symbols(market_type)
+            if not isinstance(data, list):
+                return data
+            
+            top_symbols = sorted(data, key=lambda x: float(x.get('mv') or 0), reverse=True)[:top_count]
+            return self._calculate_aggregate_history(top_symbols, adjusted, weighted=weighted)
+        except Exception as e:
+            return {"error": f"خطا در محاسبه شاخص کل (پروکسی): {e}"}
+
+    def _calculate_aggregate_history(self, symbols, adjusted, weighted=True):
+        """Helper to average history of multiple symbols."""
+        import pandas as pd
+        all_dfs = []
+        for ts in symbols:
+            name = ts.get('l18')
+            weight = float(ts.get('mv') or 1) if weighted else 1.0
+            
+            # Fetch individual histories (cached in DB)
+            h = self.get_price_history(name, adjusted=adjusted, service="proxy_component")
+            if isinstance(h, list) and h:
+                df = pd.DataFrame(h)
+                if 'date' in df.columns:
+                    df['date'] = df['date'].str[:10]
+                    # Ensure numeric
+                    for col in ['pc', 'pf', 'pmax', 'pmin', 'tvol']:
+                        if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce')
+                    
+                    # Apply weight logic
+                    if weighted:
+                        for col in ['pc', 'pf', 'pmax', 'pmin']:
+                            df[col] *= weight
+                    
+                    df['weight'] = weight
+                    all_dfs.append(df)
+        
+        if not all_dfs:
+            return []
+            
+        combined = pd.concat(all_dfs)
+        if weighted:
+            # Weighted sum then divide by total weight per date
+            grouped = combined.groupby('date').sum().reset_index()
+            for col in ['pc', 'pf', 'pmax', 'pmin']:
+                grouped[col] /= grouped['weight']
+        else:
+            # Simple average
+            grouped = combined.groupby('date').mean().reset_index()
+            
+        grouped = grouped.sort_values('date', ascending=False)
+        return grouped.to_dict('records')
+
 
     def get_candlestick(self, symbol, adjusted=True, type=1):
         # Candlestick API requires 'type' parameter and returns a dict
@@ -824,15 +937,17 @@ class TSETMCClient:
         db_category = f"indices_type_{index_type}"
         data = self._make_request("Api/Tsetmc/Index.php", {"type": index_type})
         
-        is_error = isinstance(data, dict) and "error" in data
+        # Ensure data is a list as per documentation
+        if data and isinstance(data, dict) and "error" not in data:
+            data = [data]
+            
+        is_error = not data or (isinstance(data, dict) and "error" in data)
         
-        if not is_error and data:
+        if not is_error:
             # Success: Save to Registry
             try:
-                # Wrap dict in list for DB compatibility if needed
-                save_list = [data] if isinstance(data, dict) else data
                 db.clear_symbols(db_category)
-                db.save_symbols(save_list, db_category)
+                db.save_symbols(data, db_category)
             except Exception as e:
                 print(f"DEBUG: Index save error: {e}")
             return data
@@ -842,14 +957,11 @@ class TSETMCClient:
             stored = db.get_symbols_by_market(db_category)
             if stored:
                 print(f"DEBUG: API Failed for Index Type {index_type}. Falling back to DB.")
-                # Return dict if it was originally a dict type (1 or 2)
-                if index_type in ["1", "2"] or str(index_type) in ["1", "2"]:
-                    return stored[0]
                 return stored
         except Exception as e:
             print(f"DEBUG: Index DB retrieval error: {e}")
             
-        return data
+        return data if data else {"error": "عدم دریافت اطلاعات شاخص"}
 
     def get_nav(self, symbol):
         return self._make_request("Api/Tsetmc/Nav.php", {"l18": symbol})
@@ -993,80 +1105,102 @@ def fetch_data():
                 res3 = client.get_indices(3, force_refresh=force_refresh)
                 
                 result = []
-                if res1:
-                    result.append({
-                        'l18': "شاخص کل",
-                        'l30': "شاخص کل بورس",
-                        'pc': res1.get('index'),
-                        'pcc': res1.get('index_change'),
-                        'pcp': round((res1.get('index_change', 0) / (res1.get('index', 1) - res1.get('index_change', 0))) * 100, 2) if res1.get('index') else 0,
-                        'time': res1.get('time')
-                    })
-                if res2:
-                    result.append({
-                        'l18': "شاخص کل فرابورس",
-                        'l30': "شاخص کل فرابورس",
-                        'pc': res2.get('index'),
-                        'pcc': res2.get('index_change'),
-                        'pcp': round((res2.get('index_change', 0) / (res2.get('index', 1) - res2.get('index_change', 0))) * 100, 2) if res2.get('index') else 0,
-                        'time': res2.get('time')
-                    })
+                # Helper to map index keys correctly based on documentation
+                def map_idx(data, fallback_name):
+                    if not data or not isinstance(data, list): return None
+                    item = data[0] if isinstance(data, list) else data
+                    # Doc keys: name, value, change, change_percent
+                    # Fallback to older keys just in case: index, index_change
+                    val = item.get('value') or item.get('index') or 0
+                    chg = item.get('change') or item.get('index_change') or 0
+                    pcp = item.get('change_percent') or item.get('index_change_percent')
+                    if pcp is None and val:
+                        pcp = round((chg / (val - chg)) * 100, 2) if (val - chg) != 0 else 0
+                    
+                    return {
+                        'l18': item.get('name') or fallback_name,
+                        'l30': item.get('l30') or f"شاخص {fallback_name}",
+                        'pc': val,
+                        'pcc': chg,
+                        'pcp': pcp,
+                        'time': item.get('time') or datetime.now().strftime("%H:%M:%S")
+                    }
+
+                b_idx = map_idx(res1, "شاخص کل")
+                if b_idx: result.append(b_idx)
+                
+                f_idx = map_idx(res2, "شاخص کل فرابورس")
+                if f_idx: result.append(f_idx)
+                
                 if isinstance(res3, list):
-                    for match in res3:
+                    for item in res3:
                         result.append({
-                            'l18': match['name'],
-                            'l30': match['name'],
-                            'pc': match['index'],
-                            'pcc': match['index_change'],
-                            'pcp': match['index_change_percent'],
-                            'pmin': match['min'],
-                            'pmax': match['max'],
-                            'time': match['time']
+                            'l18': item.get('name') or item.get('l18'),
+                            'l30': item.get('l30') or item.get('name'),
+                            'pc': item.get('value') or item.get('index'),
+                            'pcc': item.get('change') or item.get('index_change'),
+                            'pcp': item.get('change_percent') or item.get('index_change_percent'),
+                            'pmin': item.get('min'),
+                            'pmax': item.get('max'),
+                            'time': item.get('time')
                         })
             elif symbol == "شاخص کل":
                 res = client.get_indices(1, force_refresh=force_refresh)
-                if res:
+                if isinstance(res, list) and res:
+                    item = res[0]
+                    val = item.get('value') or item.get('index') or 0
+                    chg = item.get('change') or item.get('index_change') or 0
+                    pcp = item.get('change_percent') or item.get('index_change_percent')
+                    if pcp is None and val:
+                        pcp = round((chg / (val - chg)) * 100, 2) if (val - chg) != 0 else 0
                     result = [{
                         'l18': "شاخص کل",
                         'l30': "شاخص کل بورس",
-                        'pc': res.get('index'),
-                        'pcc': res.get('index_change'),
-                        'pcp': round((res.get('index_change', 0) / (res.get('index', 1) - res.get('index_change', 0))) * 100, 2) if res.get('index') else 0,
-                        'time': res.get('time')
+                        'pc': val,
+                        'pcc': chg,
+                        'pcp': pcp,
+                        'time': item.get('time')
                     }]
             elif symbol == "شاخص کل فرابورس":
                 res = client.get_indices(2, force_refresh=force_refresh)
-                if res:
+                if isinstance(res, list) and res:
+                    item = res[0]
+                    val = item.get('value') or item.get('index') or 0
+                    chg = item.get('change') or item.get('index_change') or 0
+                    pcp = item.get('change_percent') or item.get('index_change_percent')
+                    if pcp is None and val:
+                        pcp = round((chg / (val - chg)) * 100, 2) if (val - chg) != 0 else 0
                     result = [{
                         'l18': "شاخص کل فرابورس",
                         'l30': "شاخص کل فرابورس",
-                        'pc': res.get('index'),
-                        'pcc': res.get('index_change'),
-                        'pcp': round((res.get('index_change', 0) / (res.get('index', 1) - res.get('index_change', 0))) * 100, 2) if res.get('index') else 0,
-                        'time': res.get('time')
+                        'pc': val,
+                        'pcc': chg,
+                        'pcp': pcp,
+                        'time': item.get('time')
                     }]
             else:
                 res = client.get_indices(3, force_refresh=force_refresh)
                 if isinstance(res, list):
                     # Find the specific index by name (symbol)
-                    match = next((item for item in res if item['name'] == symbol), None)
+                    match = next((item for item in res if (item.get('name') == symbol or item.get('l18') == symbol)), None)
                     if match:
-                        # Format it to look like symbol info for the table
                         result = [{
-                            'l18': match['name'],
-                            'l30': match['name'],
-                            'pc': match['index'],
-                            'pcc': match['index_change'],
-                            'pcp': match['index_change_percent'],
-                            'pmin': match['min'],
-                            'pmax': match['max'],
-                            'time': match['time']
+                            'l18': match.get('name') or match.get('l18'),
+                            'l30': match.get('l30') or match.get('name'),
+                            'pc': match.get('value') or match.get('index'),
+                            'pcc': match.get('change') or match.get('index_change'),
+                            'pcp': match.get('change_percent') or match.get('index_change_percent'),
+                            'pmin': match.get('min'),
+                            'pmax': match.get('max'),
+                            'time': match.get('time')
                         }]
         elif service_type in ['history', 'technical']:
             if symbol == "all":
                 return jsonify({"error": "برای تحلیل تکنیکال یا تاریخچه، لطفاً یک شاخص مشخص را انتخاب کنید (نه 'همه موارد')."})
-            # For market indices, we use the history API directly with adjusted=False
+            
+            # Use centralized history fetcher (which handles proxy for indices)
             result = client.get_price_history(symbol, adjusted=False, force_refresh=force_refresh)
+            
             if isinstance(result, list) and len(result) > 0:
                 result = TechnicalAnalyzer.prepare_ohlcv_data(result)
                 if service_type == 'technical':
@@ -1083,7 +1217,6 @@ def fetch_data():
     elif asset_type == 'indices_industry':
         if service_type == 'realtime':
             # Calculate realtime proxy index by averaging pcp of all symbols in the sector
-            # Use force_refresh for getting symbols if requested
             d1 = client.get_all_symbols("1", force_refresh=force_refresh)
             d2 = client.get_all_symbols("2", force_refresh=force_refresh)
             data = []
@@ -1129,56 +1262,22 @@ def fetch_data():
         elif service_type in ['history', 'technical']:
             if symbol == "all":
                 return jsonify({"error": "برای تحلیل تکنیکال یا تاریخچه صنعت، لطفاً یک صنعت مشخص را انتخاب کنید."})
-            # For industry indices, we calculate a proxy index by averaging top symbols in that sector
-            # Fetch from both Bourse and Farabourse to get all symbols in the sector
-            d1 = client.get_all_symbols("1", force_refresh=force_refresh)
-            d2 = client.get_all_symbols("2", force_refresh=force_refresh)
-            data = []
-            if isinstance(d1, list): data.extend(d1)
-            if isinstance(d2, list): data.extend(d2)
             
-            if data:
-                sector_symbols = [s for s in data if s.get('cs') == symbol]
-                if sector_symbols:
-                    # Take top 5 symbols by market value (mv) or volume (v) to avoid hitting limits
-                    top_symbols = sorted(sector_symbols, key=lambda x: float(x.get('mv') or x.get('v') or 0), reverse=True)[:5]
-                    all_histories = []
-                    for ts in top_symbols:
-                        # For industry components, we use user's refresh flag
-                        h = client.get_price_history(ts.get('l18'), adjusted=adjusted, service="symbols", force_refresh=force_refresh)
-                        if isinstance(h, list):
-                            all_histories.append(pd.DataFrame(h))
-                    
-                    if all_histories:
-                        combined = pd.concat(all_histories)
-                        # Average by date
-                        if 'date' in combined.columns:
-                            combined['date'] = combined['date'].str[:10]
-                            # Ensure numeric
-                            for col in ['pc', 'pf', 'pmax', 'pmin', 'tvol']:
-                                if col in combined.columns:
-                                    combined[col] = pd.to_numeric(combined[col], errors='coerce')
-                            
-                            avg_hist = combined.groupby('date').mean().reset_index()
-                            avg_hist = avg_hist.sort_values('date', ascending=False)
-                            result = avg_hist.to_dict('records')
-                            result = TechnicalAnalyzer.prepare_ohlcv_data(result)
-                            
-                            # Map for technical analysis if needed
-                            if service_type == 'technical':
-                                if timeframe == 'weekly':
-                                    result = TechnicalAnalyzer.resample_to_weekly(result)
-                                result = TechnicalAnalyzer.calculate_technical_analysis(result)
-                            elif timeframe == 'weekly':
-                                result = TechnicalAnalyzer.resample_to_weekly(result)
-                        else:
-                            result = {"error": "داده‌های تاریخی برای این صنعت یافت نشد."}
-                    else:
-                        result = {"error": "خطا در دریافت تاریخچه نمادهای صنعت."}
-                else:
-                    result = {"error": "نمادی در این صنعت یافت نشد."}
+            # Use centralized history fetcher (which handles proxy for sectors)
+            result = client.get_price_history(symbol, adjusted=adjusted, force_refresh=force_refresh)
+            
+            if isinstance(result, list) and len(result) > 0:
+                result = TechnicalAnalyzer.prepare_ohlcv_data(result)
+                if service_type == 'technical':
+                    if timeframe == 'weekly':
+                        result = TechnicalAnalyzer.resample_to_weekly(result)
+                    result = TechnicalAnalyzer.calculate_technical_analysis(result)
+                elif timeframe == 'weekly':
+                    result = TechnicalAnalyzer.resample_to_weekly(result)
+            elif isinstance(result, dict) and "error" in result:
+                return jsonify(result)
             else:
-                result = {"error": "خطا در دریافت لیست نمادها."}
+                result = {"error": "داده‌های تاریخی برای این صنعت یافت نشد."}
 
     elif service_type == 'heatmap':
         # Heatmap uses realtime data for all symbols in the selected market
