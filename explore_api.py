@@ -1,45 +1,26 @@
-import requests
-import urllib3
+
+from curl_cffi import requests
 import json
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-})
-
-url = "https://brsapi.ir/Api/Tsetmc/AllSymbols.php"
-api_key = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3"
-
-def check_type(type_code):
-    print(f"\n--- Testing Type {type_code} ---")
-    params = {"type": str(type_code), "key": api_key}
+def check_type(api_type):
+    url = f"https://brsapi.ir/FreeTsetmcApi/Api/Tsetmc/AllSymbols.php?type={api_type}"
     try:
-        response = session.get(url, params=params, timeout=10, verify=False)
-        if response.status_code != 200:
-            print(f"Failed with status {response.status_code}")
-            return
-        
+        response = requests.get(url, impersonate="chrome110", timeout=20)
         data = response.json()
-        if not isinstance(data, list):
-            print(f"Unexpected format: {type(data)}")
-            if isinstance(data, dict) and "error" in data:
-                 print(f"Error: {data['error']}")
-            return
-
-        print(f"Count: {len(data)}")
-        if len(data) > 0:
-            print(f"Sample: {data[0]}")
-            # Collect Sector IDs (cs_id)
-            cs_ids = set()
-            for item in data:
-                if 'cs_id' in item:
-                    cs_ids.add(item['cs_id'])
-            print(f"Distinct cs_ids: {len(cs_ids)}")
-            # print(f"First 10 cs_ids: {list(cs_ids)[:10]}")
+        print(f"--- API Type {api_type} ---")
+        if isinstance(data, list):
+            print(f"Count: {len(data)}")
+            markets = {}
+            for s in data[:200]:
+                m = s.get('market_name') or s.get('flowTitle') or s.get('market') or "Unknown"
+                markets[m] = markets.get(m, 0) + 1
+            print(f"Markets in first 200: {markets}")
+            if data:
+                print(f"Sample: {data[0].get('l18')} - {data[0].get('isin')} - {data[0].get('cs')}")
+        else:
+            print(f"Response: {data}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error Type {api_type}: {e}")
 
-for i in range(1, 6):
+for i in [1, 2, 3]:
     check_type(i)
