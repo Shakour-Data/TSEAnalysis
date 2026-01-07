@@ -794,13 +794,22 @@
         // Utility: Jalali Date Formatter
         const jalaliFormatter = (val) => {
             if (!val) return '---';
-            const date = new Date(val);
-            if (isNaN(date.getTime())) return val;
-            return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            }).format(date);
+            
+            try {
+                const date = new Date(val);
+                if (isNaN(date.getTime())) return val;
+                
+                // Use a more robust check for Persian locale support
+                return new Intl.DateTimeFormat('fa-IR', {
+                    calendar: 'persian',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                }).format(date);
+            } catch (e) {
+                console.error("Jalali Formatter Error:", e);
+                return val;
+            }
         };
 
         function switchTimeframe(tf) {
@@ -1427,11 +1436,9 @@
             const container = document.getElementById('main_chart');
             const volContainer = document.getElementById('volume_chart');
             
-            // Check if professional backend chart exists
+            // Prefer interactive ApexCharts over static image for better UX/Localization
             if (data[0] && data[0].chart_image) {
-                container.innerHTML = `<img src="data:image/png;base64,${data[0].chart_image}" class="img-fluid rounded-4 shadow-sm" style="width:100%">`;
-                volContainer.style.display = 'none';
-                return;
+                console.log("Static chart image available but skipping to use interactive ApexCharts.");
             }
             
             volContainer.style.display = 'block';
@@ -1474,7 +1481,7 @@
                 xaxis: { 
                     type: 'datetime', 
                     labels: { 
-                        formatter: jalaliFormatter,
+                        formatter: function(val) { return jalaliFormatter(val); },
                         style: { fontSize: '11px' },
                         hideOverlappingLabels: true,
                         rotate: -45,
@@ -1535,7 +1542,7 @@
                 xaxis: { 
                     type: 'datetime', 
                     labels: { 
-                        formatter: jalaliFormatter,
+                        formatter: function(val) { return jalaliFormatter(val); },
                         style: { fontSize: '11px' },
                         hideOverlappingLabels: true,
                         rotate: -45
@@ -1560,7 +1567,7 @@
                         distributed: false // Use individual colors from data
                     }
                 },
-                tooltip: { x: { formatter: jalaliFormatter } }
+                tooltip: { x: { formatter: function(val) { return jalaliFormatter(val); } } }
             };
 
             if (mainChart) mainChart.destroy();
@@ -1627,7 +1634,7 @@
                         type: 'datetime', 
                         labels: { 
                             show: true,
-                            formatter: jalaliFormatter,
+                            formatter: function(val) { return jalaliFormatter(val); },
                             style: { fontSize: '9px' }
                         } 
                     },
@@ -1663,7 +1670,7 @@
                 colors: ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b'],
                 xaxis: { 
                     type: 'datetime',
-                    labels: { formatter: jalaliFormatter }
+                    labels: { formatter: function(val) { return jalaliFormatter(val); } }
                 },
                 yaxis: { labels: { formatter: (val) => Math.abs(val).toLocaleString() } },
                 plotOptions: { bar: { horizontal: false, columnWidth: '80%' } },
