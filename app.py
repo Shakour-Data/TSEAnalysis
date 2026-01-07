@@ -4,13 +4,21 @@ import shutil
 import subprocess
 import ssl
 import socket
+import time
 from urllib.parse import urlencode
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_file
 import requests
+import requests.utils
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ===== FIREWALL NUCLEAR OPTION =====
+# To prevent NO 10054 errors, we globally disable the "python-requests" User-Agent
+# This ensures that even 3rd party libraries or accidental calls are masked as a browser.
+SAFE_BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+requests.utils.default_user_agent = lambda: SAFE_BROWSER_UA
 
 # ===== ANTI-NGFW MODULE =====
 # Next-Generation Firewalls (NGFW) detect Python by:
@@ -52,8 +60,10 @@ except ImportError:
 from datetime import datetime
 import io
 import random
+import threading
 from flask_caching import Cache
 from technical_analysis import TechnicalAnalyzer
+from database import db
 
 app = Flask(__name__)
 
@@ -70,7 +80,7 @@ BASE_URL = "https://brsapi.ir"
 # Set YOUR_PROXY if you are on a foreign server (OVH, etc.)
 # Examples: "http://user:pass@host:port" or "socks5://host:port"
 # If you have a local v2ray/xray running on 1080: "socks5://127.0.0.1:1080"
-PROXY_URL = None # Change this if needed
+PROXY_URL = None # DEFAULT: NO PROXY
 
 REQUEST_USAGE_LIMIT = 1.0  # Allow all requests
 
@@ -111,9 +121,9 @@ class TSETMCClient:
     - Connection timing patterns
     """
     
-    # Chrome 131 Browser Headers (Exact match with BrsApi Rules)
+    # Chrome 131 Browser Headers (COMPLIANT with BrsApi 6G Firewall Rules)
     CHROME_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "User-Agent": SAFE_BROWSER_UA,
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
         "Accept-Encoding": "gzip, deflate, br",
@@ -126,13 +136,28 @@ class TSETMCClient:
         "Sec-Ch-Ua-Platform": '"Windows"',
     }
     
+    # BrsApi Fair Use Constants (STRICT MODE ENABLED)
+    MAX_REQS_STRICT = 200  # Conservative limit (Official is 300)
+    WINDOW_SECONDS = 300  # 5 minutes window
+    MIN_REQUEST_GAP = 2.5 # High-safety gap between any network calls
+    
     def __init__(self, api_key, proxy=None):
         self.api_key = api_key
         self.base_url = BASE_URL
         self.proxy = proxy
         self.active_client = None
         self.client_name = "none"
+        self._request_history = [] # Timestamps of successful network requests
+        self._last_network_call = 0
+        self._network_lock = threading.Lock() # ENSURE ABSOLUTE SEQUENTIAL ACCESS
+        self._consecutive_failures = 0
+        self._cooling_until = 0
         
+        # Rule Check: Proxy usage in free versions
+        if self.proxy:
+            print("⚠️ WARNING: BrsApi rules prohibit usage of proxies/CORS proxies for FREE accounts.")
+            print("   Ensure your API Key supports proxy usage or disable PROXY_URL if you face a 10054 Connection Reset.")
+
         # Initialize the best available client
         self._init_http_client()
         
@@ -149,6 +174,7 @@ class TSETMCClient:
         # Priority 1: tls_client (Best JA3 fingerprint spoofing)
         if TLS_CLIENT_AVAILABLE:
             try:
+                # We rotate fingerprints if one fails, starting with chrome_120
                 self.active_client = tls_client.Session(
                     client_identifier="chrome_120",
                     random_tls_extension_order=True
@@ -165,6 +191,7 @@ class TSETMCClient:
         if CURL_CFFI_AVAILABLE:
             try:
                 self.active_client = crequests.Session()
+                self.active_client.headers.update(self.CHROME_HEADERS)
                 if self.proxy:
                     self.active_client.proxies = {"http": self.proxy, "https": self.proxy}
                 self.client_name = "curl_cffi (Chrome impersonate)"
@@ -181,13 +208,42 @@ class TSETMCClient:
         self._symbols_cache = {}
         print("DEBUG: Symbol cache cleared on startup")
 
-    def _fetch_symbols_by_type(self, type_code):
+    def _fetch_symbols_by_type(self, type_code, force_refresh=False):
+        """Fetch symbols with absolute priority on stability and local cache."""
+        db_category = f"api_type_{type_code}"
+        
+        # 1. Check if we already have data in DB (Registry)
+        stored_data = []
+        try:
+            stored_data = db.get_symbols_by_market(db_category)
+        except Exception as e:
+            print(f"DEBUG: DB Error: {e}")
+
+        # If not forcing refresh and we have data, return immediately (Speed + Safety)
+        if not force_refresh and stored_data:
+            return stored_data
+
+        # 2. API Call (With multiple retries and jitter)
         data = self._make_request("Api/Tsetmc/AllSymbols.php", {"type": str(type_code)}, service="symbols")
-        if isinstance(data, list):
-            if data:
+        
+        if isinstance(data, list) and len(data) > 10: # Sanity check: Type 1/2 usually have hundreds
+            # Success: Update Database Registry. NO CLEAR needed, save_symbols uses REPLACE.
+            try:
+                db.save_symbols(data, db_category)
                 return data
-            return {"error": f"وب‌سرویس برای نوع {type_code} داده‌ای بازنگرداند."}
-        return data
+            except Exception as e:
+                print(f"DEBUG: Save to DB failed: {e}")
+                return data # Still return API data even if DB save fails
+            
+        # 3. Handle API Failure
+        if stored_data:
+            print(f"DEBUG: API returned error/empty for Type {type_code}. Returning cached DB data.")
+            return stored_data
+            
+        # 4. Total Failure (No DB, No API)
+        if isinstance(data, dict) and "error" in data:
+            return data
+        return {"error": "دیتابیس محلی خالی است و ارتباط با سرور نیز برقرار نشد. لطفاً دکمه همگام‌سازی را بزنید."}
 
     def _normalize_text(self, value):
         if value is None:
@@ -218,60 +274,92 @@ class TSETMCClient:
         return flows.get(flow_code, "")
 
     def _classify_equity_market(self, symbol):
-        cs_id = str(symbol.get("cs_id") or symbol.get("csId") or "").strip()
-        cs_name = self._normalize_text(symbol.get("cs", ""))
-        market_name = self._extract_market_name(symbol)
+        """Categorizes symbols into markets with robust fallback logic and partial matches."""
+        # Normalize all inputs
+        cs_id = str(symbol.get("cs_id") or symbol.get("csId") or symbol.get("sectorId") or "").strip()
+        cs_name = self._normalize_text(symbol.get("cs", "") or symbol.get("sectorName") or "")
+        
+        # Robust market name extraction
+        market_name = str(symbol.get("market_name") or symbol.get("market") or symbol.get("flowTitle") or symbol.get("marketName") or "").lower()
+        market_name = self._normalize_text(market_name).lower()
+        
         ticker = str(symbol.get("l18") or symbol.get("symbol") or "")
-        flow = str(symbol.get("flow") or "").strip()
+        
+        # Robust flow extraction
+        flow = str(symbol.get("flow") or symbol.get("flow_id") or symbol.get("flowId") or "").strip()
+        
+        isin = str(symbol.get("isin") or "").upper().strip()
 
-        # 1. ETFs and Funds
-        if cs_id == "68" or "ETF" in cs_name.upper() or "صندوق" in cs_name or "سرمایه گذاری" in cs_name:
+        # 0. Bourse Kala (Commodity Exchange) - Check this FIRST to avoid confusion
+        if any(k in market_name for k in ["کالا", "kala", "گواهی", "سپرده", "آتی", "futures"]) or \
+           any(k in cs_name for k in ["بورس کالا", "مشتقه", "کالایی"]) or \
+           any(k in ticker for k in ["سکه", "طلا", "زعف", "نفت", "برنج", "پسته", "میوه", "شمش"]):
+            return "kala"
+
+        if "انرژی" in market_name or "energy" in market_name:
+            return "energy"
+
+        # 1. ETFs and Funds (Critical check)
+        if cs_id == "68" or isin.startswith("IRO5") or "etf" in cs_name.lower() or "صندوق" in cs_name:
             return "etf"
         
         # 2. Fixed Income / Bonds
-        if cs_id == "69" or any(k in cs_name for k in ["اوراق", "صکوک", "اجاره", "مرابحه", "منفعت", "گام"]):
+        if cs_id == "69" or isin.startswith(("IRO2", "IRO4", "IROB")) or any(k in cs_name for k in ["اوراق", "صکوک", "اجاره", "مرابحه", "منفعت", "گام"]):
             return "fixed_income"
             
-        # 3. Housing Facilities
-        if cs_id == "59" or "تسهیلات" in cs_name or "مسکن" in cs_name or ticker.startswith("تسه"):
+        # 3. Housing Facilities (Tashilat)
+        if cs_id == "59" or isin.startswith("IROL") or any(k in cs_name for k in ["تسهیلات", "مسکن"]) or ticker.startswith("تسه"):
             return "tashilat"
 
-        # 4. Primary Market Classification by Flow (Most reliable)
-        if flow in ["1", "2"]:
-            return "bourse"
-        if flow in ["3", "4"]:
-            return "farabourse"
-        if flow in ["5", "6", "7", "8"]:
+        # 4. Payeh (Base Market)
+        if flow in ["5", "6", "7", "8"] or any(k in market_name for k in ["پایه", "payeh", "زرد", "نارنجی", "قرمز"]):
+            return "base"
+        if isin.startswith("IRO7"):
             return "base"
 
-        # 5. Fallback/Heuristic categorization
-        if "پایه" in market_name or ticker.endswith("4") or any(k in market_name for k in ["زرد", "نارنجی", "قرمز"]):
-            return "base"
-        
-        if "فرابورس" in market_name:
+        # 5. Farabourse
+        if flow in ["3", "4"] or any(k in market_name for k in ["فرابورس", "farabourse", "ifb", "پذیرفته", "پذيرفته"]):
             return "farabourse"
-            
-        if "بورس" in market_name or "بازار اول" in market_name or "بازار دوم" in market_name:
+        if isin.startswith("IRO3"):
+            return "farabourse"
+
+        # 6. Bourse Tehran
+        if flow in ["1", "2"] or any(k in market_name for k in ["بورس", "bourse", "tse"]):
+            return "bourse"
+        if isin.startswith("IRO1"):
             return "bourse"
 
+        # Default catch-all
         return "bourse"
 
-    def _get_equity_universe(self):
-        cache_key = "symbols_equity_universe"
+    def _get_equity_universe(self, api_type="1", force_refresh=False):
+        """Unified fetch for symbol universes (Type 1 or 2)."""
+        cache_key = f"symbols_universe_type_{api_type}"
         now = datetime.now()
-        cached = self._symbols_cache.get(cache_key)
-        if cached:
-            data, timestamp = cached
-            if (now - timestamp).total_seconds() < 600:
-                return data
+        
+        if not force_refresh:
+            cached = self._symbols_cache.get(cache_key)
+            if cached:
+                data, timestamp = cached
+                if (now - timestamp).total_seconds() < 21600: # 6 hours
+                    return data
 
-        universe = self._fetch_symbols_by_type("1")
-        if isinstance(universe, list):
-            self._symbols_cache[cache_key] = (universe, now)
-        return universe
+        data = self._fetch_symbols_by_type(api_type, force_refresh=force_refresh)
+        if isinstance(data, list):
+            self._symbols_cache[cache_key] = (data, now)
+        return data
 
-    def _filter_equities_by_category(self, categories):
-        equities = self._get_equity_universe()
+    def _filter_symbols(self, universe, categories):
+        """Filters a list of symbols by allowed categories."""
+        if not isinstance(universe, list):
+            return []
+
+        allowed = set(categories)
+        filtered = [sym for sym in universe if self._classify_equity_market(sym) in allowed]
+        return filtered
+
+    def _filter_equities_by_category(self, categories, force_refresh=False):
+        equities = self._get_equity_universe(force_refresh=force_refresh)
         if isinstance(equities, dict):
             return equities
 
@@ -292,120 +380,156 @@ class TSETMCClient:
                     merged[key] = item
         return list(merged.values())
 
+    def _apply_fair_use_control(self, endpoint):
+        """
+        Enforces BrsApi Fair Use Policy and Anti-NGFW Timing.
+        Absolute sequential execution via locking.
+        """
+        now = time.time()
+        
+        # 0. Circuit Breaker: If we are in a cooling period, block immediately
+        if now < self._cooling_until:
+            wait_time = self._cooling_until - now
+            print(f"⚠️ COOLING DOWN: Suspicious activity detected. Waiting {wait_time:.1f}s until cooldown ends...")
+            time.sleep(wait_time)
+            now = time.time()
+
+        # 1. Human-Like Behavior: Random "Think Time" (0.5s - 1.5s)
+        # This breaks the "robotic" exact-interval pattern.
+        think_time = random.uniform(0.5, 1.5)
+        time.sleep(think_time)
+        now = time.time()
+
+        # 2. Mandatory gap between requests (Very Strict: 2.5s)
+        elapsed_since_last = now - self._last_network_call
+        if elapsed_since_last < self.MIN_REQUEST_GAP:
+            sleep_time = self.MIN_REQUEST_GAP - elapsed_since_last
+            time.sleep(sleep_time)
+            now = time.time() 
+            
+        # 3. 5-Minute window rate limiting (STRICT 200/5min)
+        self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
+        
+        if len(self._request_history) >= self.MAX_REQS_STRICT:
+            wait_needed = self.WINDOW_SECONDS - (now - self._request_history[0])
+            print(f"⚠️ RATE LIMIT: Safe window reached. Professional Pause for {int(wait_needed)}s...")
+            time.sleep(wait_needed + 2)
+            now = time.time()
+            self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
+            
+        self._last_network_call = now
+        self._request_history.append(now)
+
     def _make_request(self, endpoint, params=None, service=None):
         """
-        Anti-NGFW Request Handler with multiple bypass techniques.
-        
-        Tries in order:
-        1. tls_client (Chrome 120 JA3 fingerprint)
-        2. curl_cffi (Chrome impersonation)
-        3. httpx (HTTP/2)
-        4. Native curl.exe (OS-level bypass)
-        5. Standard requests (last resort)
+        Professional Resilient Request Handler.
+        Uses Thread-Locking for absolute sequential safety.
         """
-        # Service Classification
-        if not service:
-            if "AllSymbols" in endpoint: service = "symbols"
-            elif "Index" in endpoint: service = "indices"
-            elif "Symbol" in endpoint: service = "realtime"
-            elif "History" in endpoint: service = "history"
-            elif "Candlestick" in endpoint: service = "technical"
-            elif "Transaction" in endpoint: service = "transactions"
-            elif "Shareholder" in endpoint: service = "shareholders"
-            elif "Nav" in endpoint: service = "nav"
-            elif "Announcement" in endpoint: service = "codal"
+        with self._network_lock: # ABSOLUTE SEQUENTIAL ACCESS
+            return self._locked_make_request(endpoint, params, service)
 
-        url = f"{self.base_url}/{endpoint}"
+    def _locked_make_request(self, endpoint, params=None, service=None):
+        self._apply_fair_use_control(endpoint)
+
         query = params.copy() if params else {}
         query["key"] = self.api_key
-        full_url = f"{url}?{urlencode(query)}"
         
-        # Method 1: tls_client (Best JA3 spoofing)
-        if TLS_CLIENT_AVAILABLE and isinstance(self.active_client, tls_client.Session):
-            try:
-                print(f"DEBUG: Trying tls_client for {endpoint}...")
-                response = self.active_client.get(
-                    full_url,
-                    headers=self.CHROME_HEADERS
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    update_stats(service or "unknown", "success")
-                    print(f"DEBUG: tls_client SUCCESS for {endpoint}")
-                    return data
-            except Exception as e:
-                print(f"DEBUG: tls_client failed: {e}")
+        # We will try both HTTPS and HTTP for absolute resilience
+        protocols = ["https", "http"]
         
-        # Method 2: curl_cffi with Chrome impersonation
-        if CURL_CFFI_AVAILABLE:
-            try:
-                print(f"DEBUG: Trying curl_cffi for {endpoint}...")
-                proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
-                response = crequests.get(
-                    full_url,
-                    headers=self.CHROME_HEADERS,
-                    impersonate="chrome120",
-                    timeout=20,
-                    proxies=proxies,
-                    verify=False
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    update_stats(service or "unknown", "success")
-                    print(f"DEBUG: curl_cffi SUCCESS for {endpoint}")
-                    return data
-            except Exception as e:
-                print(f"DEBUG: curl_cffi failed: {e}")
+        # Rotational identifiers
+        idents = ["chrome_120", "firefox_117", "chrome_110", "safari_15_6_1", "chrome_131"]
         
-        # Method 3: httpx with HTTP/2
-        if HTTPX_AVAILABLE:
-            try:
-                print(f"DEBUG: Trying httpx HTTP/2 for {endpoint}...")
-                proxy = self.proxy if self.proxy else None
-                with httpx.Client(http2=True, verify=False, timeout=20.0, proxy=proxy) as client:
-                    response = client.get(full_url, headers=self.CHROME_HEADERS)
-                    if response.status_code == 200:
-                        data = response.json()
-                        update_stats(service or "unknown", "success")
-                        print(f"DEBUG: httpx SUCCESS for {endpoint}")
-                        return data
-            except Exception as e:
-                print(f"DEBUG: httpx failed: {e}")
+        is_discovery = (service == "symbols" or "AllSymbols" in endpoint)
+        current_max = 3 if is_discovery else 5
         
-        # Method 4: Native curl.exe (OS-level bypass)
-        fallback = self._curl_fallback_request(url, query)
-        if fallback is not None:
-            update_stats(service or "unknown", "success")
-            print(f"DEBUG: Native curl SUCCESS for {endpoint}")
-            return fallback
+        for protocol in protocols:
+            url = f"{protocol}://brsapi.ir/{endpoint}"
+            full_url = f"{url}?{urlencode(query, doseq=True)}"
+
+            for attempt in range(current_max):
+                tech_variant = attempt % 3 # 0: Curl, 1: TLS/CFFI, 2: Requests
+
+                if attempt > 0:
+                    wait = (attempt * (3 if is_discovery else 10)) + random.uniform(1, 3)
+                    print(f"DEBUG: Retrying {service or 'request'} via {protocol.upper()} (Attempt {attempt}, Tech {tech_variant})...")
+                    time.sleep(wait)
+
+                # --- Technique A: Native Curl ---
+                if tech_variant == 0 and self.curl_path:
+                    try:
+                        is_safe_mode = (attempt > 0) or (protocol == "http")
+                        data = self._curl_fallback_request(url, query, force_http11=is_safe_mode)
+                        if data and isinstance(data, (list, dict)) and "error" not in str(data)[:50]:
+                            self._consecutive_failures = 0
+                            if service: update_stats(service, "success")
+                            return data
+                    except Exception as e:
+                        print(f"DEBUG: Curl {protocol} failed: {str(e)[:40]}")
+
+                # --- Technique B: curl_cffi or tls_client ---
+                if tech_variant == 1:
+                    if CURL_CFFI_AVAILABLE:
+                        try:
+                            # impersonate only works for https, but cffi handles http fine
+                            if protocol == "https":
+                                resp = crequests.get(full_url, impersonate="chrome120", timeout=30, verify=False)
+                            else:
+                                resp = crequests.get(full_url, timeout=30)
+                                
+                            if resp.status_code == 200:
+                                self._consecutive_failures = 0
+                                if service: update_stats(service, "success")
+                                return resp.json()
+                        except Exception as e:
+                            print(f"DEBUG: CFFI {protocol} failed: {str(e)[:40]}")
+                    
+                    if TLS_CLIENT_AVAILABLE and protocol == "https":
+                        try:
+                            selected_id = random.choice(idents)
+                            sess = tls_client.Session(client_identifier=selected_id, random_tls_extension_order=True)
+                            if self.proxy: sess.proxies = {"http": self.proxy, "https": self.proxy}
+                            response = sess.get(full_url, headers=self.CHROME_HEADERS, timeout_seconds=45)
+                            if response.status_code == 200:
+                                self._consecutive_failures = 0
+                                if service: update_stats(service, "success")
+                                return response.json()
+                        except Exception: pass
+
+                # --- Technique C: Final Requests Fallback ---
+                if tech_variant == 2 or attempt == current_max - 1:
+                    try:
+                        resp = requests.get(full_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, verify=False)
+                        if resp.status_code == 200:
+                            self._consecutive_failures = 0
+                            if service: update_stats(service, "success")
+                            return resp.json()
+                    except Exception as e:
+                        print(f"DEBUG: Final {protocol} Fallback failed: {str(e)[:40]}")
+
+        # If we reach here, all attempts failed
+        if service: update_stats(service, "blocked")
         
-        # Method 5: Standard requests (last resort)
-        try:
-            print(f"DEBUG: Trying standard requests for {endpoint}...")
-            proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
-            response = requests.get(
-                full_url,
-                headers=self.CHROME_HEADERS,
-                timeout=15,
-                verify=False,
-                proxies=proxies
-            )
-            if response.status_code == 200:
-                data = response.json()
-                update_stats(service or "unknown", "success")
-                return data
-        except Exception as e:
-            print(f"DEBUG: Standard requests failed: {e}")
-        
-        # All methods failed
-        update_stats(service or "unknown", "blocked")
-        error_msg = "تمام روش‌های اتصال به سرور ناموفق بود. "
-        error_msg += "(احتمالاً فایروال نسل جدید یا محدودیت IP)"
-        return {"error": error_msg}
+        # CIRCUIT BREAKER
+        if not is_discovery:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= 3:
+                cooldown_period = 60
+                self._cooling_until = time.time() + cooldown_period
+                print(f"🚨 CRITICAL: Persistent Connection Resets. IP might be throttled. CIRCUIT BREAKER ACTIVE.")
+                self._consecutive_failures = 0 
+        else:
+            print("🚨 DEBUG: Connectivity lost. Your server (OVH France) is likely blocked by the Iranian firewall.")
+
+        return {
+            "error": "ارتباط با سرور بورس با خطا مواجه شد. سرور شما (خارج از کشور) توسط فایروال مسدود شده است.",
+            "blocked": True,
+            "technical_info": "ConnectionReset/SSL-Code-35. Recommending Proxy Iran or Local hosting."
+        }
 
 
-    def _curl_fallback_request(self, url, params):
-        """Native curl.exe fallback with full Chrome impersonation headers."""
+    def _curl_fallback_request(self, url, params, force_http11=False):
+        """Native curl.exe fallback with full browser impersonation."""
         if not self.curl_path:
             return None
 
@@ -413,136 +537,190 @@ class TSETMCClient:
             encoded = urlencode(params or {}, doseq=True)
             full_url = f"{url}?{encoded}" if encoded else url
             
-            # Full Chrome headers for curl
+            # Simple Headers (Less is more when bypassing DPI)
             header_args = [
-                "-H", f"User-Agent: {self.CHROME_HEADERS['User-Agent']}",
-                "-H", f"Accept: {self.CHROME_HEADERS['Accept']}",
-                "-H", f"Accept-Language: {self.CHROME_HEADERS['Accept-Language']}",
-                "-H", "Accept-Encoding: gzip, deflate, br",
-                "-H", "Connection: keep-alive",
-                "-H", f"Referer: {self.CHROME_HEADERS['Referer']}",
-                "-H", f"Sec-Ch-Ua: {self.CHROME_HEADERS['Sec-Ch-Ua']}",
-                "-H", "Sec-Ch-Ua-Mobile: ?0",
-                "-H", 'Sec-Ch-Ua-Platform: "Windows"',
-                "-H", "Sec-Fetch-Dest: empty",
-                "-H", "Sec-Fetch-Mode: cors",
-                "-H", "Sec-Fetch-Site: same-origin",
+                "-H", f"User-Agent: {SAFE_BROWSER_UA}",
+                "-H", "Accept: */*",
+                "-H", "Connection: close",
             ]
 
             cmd = [
                 self.curl_path,
                 "-sS",
+                "-L",
                 "-k",
-                "--compressed",
-                "--http2",  # Force HTTP/2
                 "--max-time", "25",
-                "--tlsv1.3",  # Force TLS 1.3
+                "--retry", "0",
             ]
             
-            # Add proxy to curl if available
-            if self.proxy:
+            # Rotation of HTTP versions and compression
+            if force_http11:
+                cmd.append("--http1.1")
+            
+            # Add proxy
+            if hasattr(self, 'proxy') and self.proxy:
                 if "socks5" in self.proxy:
-                    # Logic to extract host:port from proxy string like socks5://127.0.0.1:1080
-                    proxy_addr = self.proxy.split("//")[-1]
-                    cmd += ["--socks5-hostname", proxy_addr]
+                    cmd += ["--socks5-hostname", self.proxy.split("//")[-1]]
                 else:
                     cmd += ["-x", self.proxy]
                     
             cmd = cmd + header_args + [full_url]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                print(f"DEBUG: curl fallback failed ({result.returncode}): {result.stderr.strip()[:200]}")
-                return None
+            # Try 1: Standard
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
+            
+            # Try 2: If Code 35 (SSL Error), try with specific ciphers and TLS 1.2
+            if result.returncode == 35 or not result.stdout:
+                print("DEBUG: Curl Code 35 detected. Retrying with Compatibility Mode...")
+                compat_cmd = cmd + ["--tlsv1.2", "--ciphers", "DEFAULT@SECLEVEL=1"]
+                result = subprocess.run(compat_cmd, capture_output=True, text=True, timeout=35)
 
             body = result.stdout.strip().lstrip('\ufeff')
-            if not body:
-                print("DEBUG: curl fallback returned empty body")
-                return None
+            if not body or not (body.startswith('[') or body.startswith('{')):
+                # Try 3: Absolute Desperation - No headers at all
+                if result.returncode != 0:
+                    minimal_cmd = [self.curl_path, "-sS", "-k", "--max-time", "15", full_url]
+                    result = subprocess.run(minimal_cmd, capture_output=True, text=True, timeout=20)
+                    body = result.stdout.strip().lstrip('\ufeff')
 
-            return json.loads(body)
+            if body and (body.startswith('[') or body.startswith('{')):
+                return json.loads(body)
+            return None
         except Exception as exc:
-            print(f"DEBUG: curl fallback exception: {exc}")
+            print(f"DEBUG: curl exception: {exc}")
+            return None
+        except Exception as exc:
+            print(f"DEBUG: curl exception: {exc}")
             return None
 
-    def get_all_symbols(self, market_type):
-        """Return enriched symbol lists for each market selection with caching."""
+    def get_all_symbols(self, market_type, force_refresh=False):
+        """Return enriched symbol lists for each market selection with heavy caching."""
         cache_key = f"symbols_{market_type}"
         now = datetime.now()
-        cached = self._symbols_cache.get(cache_key)
-        if cached:
-            data, timestamp = cached
-            if (now - timestamp).total_seconds() < 600:
-                return data
-
-        stale_keys = [k for k, (_, ts) in self._symbols_cache.items() if (now - ts).total_seconds() > 3600]
-        for key in stale_keys:
-            self._symbols_cache.pop(key, None)
+        
+        # INCREASE CACHE: Symbols change very rarely. 6 hours (21600s)
+        if not force_refresh:
+            cached = self._symbols_cache.get(cache_key)
+            if cached:
+                data, timestamp = cached
+                if (now - timestamp).total_seconds() < 21600:
+                    return data
 
         result_symbols = []
 
-        # Helper to filter equities (exclude ETFs, Bonds, etc if needed)
-        # Based on exploration: cs_id 68 = ETF, 69 = Bonds (Type 4), 59 = Housing (Type 5)
-        # Type 1 seems to contain all Equities + ETFs.
+        # BrsApi Mapping:
+        # 1: Bourse Tehran
+        # 2: Farabourse (Usually includes Payeh)
+        # 3: Kala/Ati
+        # 4: Bonds
+        # 5: Tashilat
         
-        if market_type == "1":  # Bourse Tehran (Equities)
-            result_symbols = self._filter_equities_by_category({"bourse"})
+        if market_type == "1":  # Bourse Tehran
+            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
+            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
+            
+            # Combine both (safety first)
+            combined = []
+            if isinstance(u1, list): combined.extend(u1)
+            if isinstance(u2, list): combined.extend(u2)
+            
+            if not combined and isinstance(u1, dict) and "error" in u1:
+                return u1 # Return the actual API error if nothing was found
 
-        elif market_type == "2":  # FaraBourse (Equities)
-            result_symbols = self._filter_equities_by_category({"farabourse"})
+            result_symbols = self._filter_symbols(combined, ["bourse"])
+            
+            if not result_symbols and isinstance(u1, list) and len(u1) > 10:
+                # Fallback: take from u1 if it's not another known class
+                result_symbols = [s for s in u1 if self._classify_equity_market(s) not in ["etf", "fixed_income", "kala"]]
+
+        elif market_type == "2":  # FaraBourse
+            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
+            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
+            
+            combined = []
+            if isinstance(u2, list): combined.extend(u2)
+            if isinstance(u1, list): combined.extend(u1)
+            
+            if not combined and isinstance(u2, dict) and "error" in u2:
+                 return u2 # Return the actual API error (Reset, etc.)
+
+            result_symbols = self._filter_symbols(combined, ["farabourse"])
+            
+            if not result_symbols and isinstance(u2, list) and len(u2) > 0:
+                # Lenient fallback for IFB
+                result_symbols = [s for s in u2 if self._classify_equity_market(s) not in ["bourse", "base", "etf", "fixed_income", "kala", "tashilat"]]
 
         elif market_type == "4":  # Base Market (Payeh)
-            result_symbols = self._filter_equities_by_category({"base"})
+            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
+            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
+            u3 = self._get_equity_universe("3", force_refresh=force_refresh)
+            
+            combined = []
+            for u in [u1, u2, u3]:
+                if isinstance(u, list): combined.extend(u)
+            
+            result_symbols = self._filter_symbols(combined, ["base"])
+
+        elif market_type == "3":  # Kala/Ati
+            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
+            u3 = self._get_equity_universe("3", force_refresh=force_refresh)
+            
+            combined = []
+            for u in [u2, u3]:
+                if isinstance(u, list): combined.extend(u)
+            
+            result_symbols = self._filter_symbols(combined, ["kala"])
 
         elif market_type == "5":  # ETF Funds
-            result_symbols = self._filter_equities_by_category({"etf"})
+            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
+            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
+            f1 = self._filter_symbols(u1, ["etf"])
+            f2 = self._filter_symbols(u2, ["etf"])
+            
+            merged_dict = {}
+            for s in (f1 + f2):
+                key = s.get('isin') or s.get('l18')
+                if key: merged_dict[key] = s
+            result_symbols = list(merged_dict.values())
 
-        elif market_type == "fixed_income":  # Fixed Income / Bonds
-            bonds = self._fetch_symbols_by_type("4")
-            if isinstance(bonds, list):
-                result_symbols = bonds
-            elif isinstance(bonds, dict):
-                fallback = self._filter_equities_by_category({"fixed_income"})
-                result_symbols = fallback
+        elif market_type == "fixed_income":
+            # API Type 4 is specifically for Bonds
+            result_symbols = self._fetch_symbols_by_type("4", force_refresh=force_refresh)
 
-        elif market_type == "3":  # Bourse Kala & Ati (Derivatives/Coins)
-            # API Type 2 (Coins) and Type 3 (Futures)
-            futures = self._fetch_symbols_by_type("3")
-            coins = self._fetch_symbols_by_type("2")
-            lists_to_merge = []
-            errors = []
-            for dataset in (futures, coins):
-                if isinstance(dataset, list):
-                    lists_to_merge.append(dataset)
-                elif isinstance(dataset, dict):
-                    errors.append(dataset)
-            if lists_to_merge:
-                result_symbols = self._merge_symbol_lists(*lists_to_merge)
-            elif errors:
-                result_symbols = errors[0]
-        
-        elif market_type == "tashilat":  # Housing Facilities
-            housing = self._fetch_symbols_by_type("5")
-            if isinstance(housing, list):
-                result_symbols = housing
-            elif isinstance(housing, dict):
-                fallback = self._filter_equities_by_category({"tashilat"})
-                result_symbols = fallback
+        elif market_type == "tashilat":
+            # API Type 5 is specifically for Housing
+            result_symbols = self._fetch_symbols_by_type("5", force_refresh=force_refresh)
 
         elif market_type == "indices_market":
-            # ... existing logic ...
             lists = []
             errors = []
-            for idx_type, prefix in (("1", "بورس"), ("2", "فرابورس")):
-                data = self._make_request("Api/Tsetmc/Index.php", {"type": idx_type}, service="indices")
+            # Note: Index.php type 1/2 returns a single dict, type 3 returns a list.
+            # We fetch 1 and 2 for major indices, then 3 for the rest
+            for idx_type, prefix in (("1", "بورس"), ("2", "فرابورس"), ("3", "سایر")):
+                data = self.get_indices(idx_type, force_refresh=force_refresh)
+                
                 if isinstance(data, list):
-                    lists.extend([
-                        {"id": f"idx_{prefix}_{i}", "l18": item.get('l18') or item.get('name'), "l30": item.get('l30') or f"شاخص {prefix} {item.get('name', '')}"}
-                        for i, item in enumerate(data)
-                    ])
+                    for i, item in enumerate(data):
+                        name = item.get('l18') or item.get('name') or "نامشخص"
+                        lists.append({
+                            "id": f"idx_{idx_type}_{i}", 
+                            "l18": name, 
+                            "l30": item.get('l30') or f"شاخص {prefix} {name}"
+                        })
+                elif isinstance(data, dict) and "error" not in data:
+                    name = data.get('l18') or data.get('name') or (f"شاخص کل {prefix}")
+                    lists.append({
+                        "id": f"idx_{idx_type}_main", 
+                        "l18": name, 
+                        "l30": data.get('l30') or f"شاخص {prefix} {name}"
+                    })
                 elif isinstance(data, dict):
                     errors.append(data)
-            result_symbols = lists if lists else (errors[0] if errors else {"error": "دریافت شاخص‌ها با خطا مواجه شد."})
+            
+            if lists:
+                result_symbols = lists
+            else:
+                result_symbols = errors[0] if errors else {"error": "دریافت شاخص‌ها با خطا مواجه شد."}
 
         elif market_type == "indices_industry":
              # ... existing logic ...
@@ -568,17 +746,57 @@ class TSETMCClient:
             self._symbols_cache[cache_key] = (cleaned, now)
             return cleaned
 
-        return {"error": "داده‌ای با معیارهای انتخاب شده یافت نشد."}
+        # Diagnostic info
+        diag = ""
+        u2_data = locals().get('u2')
+        if market_type == "2" and isinstance(u2_data, list):
+            diag = f" (تعداد کل نمادهای خام دریافتی: {len(u2_data)})"
+        elif market_type == "1":
+            u1_data = locals().get('u1')
+            if isinstance(u1_data, list):
+                diag = f" (تعداد کل نمادهای خام دریافتی: {len(u1_data)})"
+
+        return {"error": f"داده‌ای با معیارهای انتخاب شده یافت نشد.{diag}"}
 
     def get_symbol_info(self, symbol):
         return self._make_request("Api/Tsetmc/Symbol.php", {"l18": symbol}, service="realtime")
 
-    def get_price_history(self, symbol, data_type=0, adjusted=True, service=None):
-        return self._make_request("Api/Tsetmc/History.php", {
-            "l18": symbol,
-            "type": data_type,
-            "adjusted": str(adjusted).lower()
-        }, service=service)
+    def get_price_history(self, symbol, data_type=0, adjusted=True, service=None, force_refresh=False):
+        """
+        User-Commanded History Fetcher (STRICTLY FORCES ADJUSTED DATA FOR DB STORAGE).
+        1. Checks DB first.
+        2. If force_refresh OR DB Empty, fetches from API (Forces adjusted=True).
+        3. Saves NEW records to DB.
+        4. Returns data ONLY from DB to ensure technical analysis uses adjusted cached records.
+        """
+        # We always use the same key because we only store adjusted data
+        db_key = f"{symbol}_{data_type}"
+        
+        # Check SQLite storage
+        cached_data = db.get_history(db_key)
+        
+        should_fetch = force_refresh or not cached_data
+        
+        if should_fetch:
+            print(f"DEBUG: Command received - Fetching fresh ADJUSTED history for {symbol}")
+            api_data = self._make_request("Api/Tsetmc/History.php", {
+                "l18": symbol,
+                "type": data_type,
+                "adjusted": "true"  # <--- FORCE TRUE: We only store adjusted data
+            }, service=service)
+            
+            if isinstance(api_data, list) and api_data:
+                # Save to DB (INSERT OR IGNORE handles new data only)
+                db.save_history(db_key, api_data)
+                # Always re-read from DB to be the single source of truth
+                cached_data = db.get_history(db_key)
+            elif isinstance(api_data, dict) and "error" in api_data and not cached_data:
+                return api_data
+        
+        if cached_data:
+            return cached_data
+            
+        return {"error": f"تاریخچه قیمتی برای {symbol} یافت نشد."}
 
     def get_candlestick(self, symbol, adjusted=True, type=1):
         # Candlestick API requires 'type' parameter and returns a dict
@@ -601,8 +819,37 @@ class TSETMCClient:
     def get_shareholders(self, symbol):
         return self._make_request("Api/Tsetmc/Shareholder.php", {"l18": symbol})
 
-    def get_indices(self, index_type):
-        return self._make_request("Api/Tsetmc/Index.php", {"type": index_type})
+    def get_indices(self, index_type, force_refresh=False):
+        """Fetch index data with persistent storage fallback."""
+        db_category = f"indices_type_{index_type}"
+        data = self._make_request("Api/Tsetmc/Index.php", {"type": index_type})
+        
+        is_error = isinstance(data, dict) and "error" in data
+        
+        if not is_error and data:
+            # Success: Save to Registry
+            try:
+                # Wrap dict in list for DB compatibility if needed
+                save_list = [data] if isinstance(data, dict) else data
+                db.clear_symbols(db_category)
+                db.save_symbols(save_list, db_category)
+            except Exception as e:
+                print(f"DEBUG: Index save error: {e}")
+            return data
+            
+        # Failure Case: Check persistent storage
+        try:
+            stored = db.get_symbols_by_market(db_category)
+            if stored:
+                print(f"DEBUG: API Failed for Index Type {index_type}. Falling back to DB.")
+                # Return dict if it was originally a dict type (1 or 2)
+                if index_type in ["1", "2"] or str(index_type) in ["1", "2"]:
+                    return stored[0]
+                return stored
+        except Exception as e:
+            print(f"DEBUG: Index DB retrieval error: {e}")
+            
+        return data
 
     def get_nav(self, symbol):
         return self._make_request("Api/Tsetmc/Nav.php", {"l18": symbol})
@@ -631,6 +878,35 @@ class TSETMCClient:
 
 client = TSETMCClient(API_KEY, PROXY_URL)
 
+def background_preload():
+    """Fills the database registry in the background with long safety gaps."""
+    # Only run if registry seems empty to avoid redundant calls
+    if hasattr(db, 'get_total_symbols_count') and db.get_total_symbols_count() < 100:
+        print("🚀 STARTUP: Registry empty. Initiating silent background pre-warm...")
+        for t in ["1", "2"]:
+            try:
+                client.get_all_symbols(t)
+                time.sleep(random.uniform(15, 25)) # Safety gap
+            except: pass
+    else:
+        print("✅ STARTUP: Registry already populated and ready.")
+
+# Start preload in a separate thread to not block Flask startup
+# WERKZEUG_RUN_MAIN check prevents double execution in debug mode
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+    threading.Thread(target=background_preload, daemon=True).start()
+
+@app.route('/api/health')
+def health_check():
+    """Diagnostic endpoint to check connectivity status."""
+    test_res = client._make_request("Api/Tsetmc/Index.php", {"type": "1"})
+    status = "OK" if "error" not in test_res else "FAILED"
+    return jsonify({
+        "status": status,
+        "proxy": PROXY_URL,
+        "active_client": client.client_name,
+        "test_response": str(test_res)[:200]
+    })
 
 @app.route('/')
 def index():
@@ -641,23 +917,55 @@ def api_test():
     return render_template('api_test.html')
 
 @app.route('/api/symbols/<market_type>')
-@cache.memoize(timeout=3600)
 def get_symbols(market_type):
-    print(f"DEBUG: Received request for symbols of type: {market_type}")
-    symbols = client.get_all_symbols(market_type)
+    refresh = request.args.get('refresh', 'false').lower() == 'true'
+    print(f"DEBUG: Received request for symbols of type: {market_type} (Refresh: {refresh})")
+    symbols = client.get_all_symbols(market_type, force_refresh=refresh)
     if isinstance(symbols, dict) and "error" in symbols:
         return jsonify(symbols)
     return jsonify(symbols if symbols else [])
 
+@app.route('/api/sync_registry', methods=['POST'])
+def sync_registry():
+    """Manual trigger for persistent registry update using ULTRA-STRICT protocol."""
+    results = {}
+    print("DEBUG: GLOBAL SYNC REQUESTED. Executing under ULTRA-STRICT protocol (Long Gaps)...")
+    
+    # Process types 1 through 5 with high-safety delays
+    for t in range(1, 6):
+        try:
+            data = client._fetch_symbols_by_type(str(t), force_refresh=True)
+            if isinstance(data, list):
+                results[f"type_{t}"] = f"Success ({len(data)} symbols)"
+            else:
+                results[f"type_{t}"] = "Failed/Empty"
+            
+            # MANDATORY: 20-35 second gap between ANY discovery call to stay invisible to DPI
+            if t < 5:
+                sleep_time = random.uniform(20.0, 35.0)
+                print(f"DEBUG: Type {t} discovery complete. Cooling down for {sleep_time:.1f}s...")
+                time.sleep(sleep_time)
+        except Exception as e:
+            results[f"type_{t}"] = f"Protocol Error: {str(e)}"
+
+    return jsonify({
+        "status": "Complete (Ultra-Strict Protocol)",
+        "details": results,
+        "registry_count": db.get_total_symbols_count() if hasattr(db, 'get_total_symbols_count') else "OK"
+    })
+
 @app.route('/api/fetch_data', methods=['POST'])
 def fetch_data():
     data = request.json
+    force_refresh = data.get('refresh', False)
+    
     # Create a cache key based on the request body
     cache_key = str(data)
-    cached_res = cache.get(cache_key)
-    if cached_res:
-        print("DEBUG: Returning cached data")
-        return jsonify(cached_res)
+    if not force_refresh:
+        cached_res = cache.get(cache_key)
+        if cached_res:
+            print("DEBUG: Returning cached data")
+            return jsonify(cached_res)
 
     asset_type = data.get('asset_type')
     symbol = data.get('symbol')
@@ -679,10 +987,10 @@ def fetch_data():
     if asset_type == 'indices_market':
         if service_type == 'realtime':
             if symbol == "all":
-                # ... (existing logic)
-                res1 = client.get_indices(1)
-                res2 = client.get_indices(2)
-                res3 = client.get_indices(3)
+                # Use individual helpers with refresh flag
+                res1 = client.get_indices(1, force_refresh=force_refresh)
+                res2 = client.get_indices(2, force_refresh=force_refresh)
+                res3 = client.get_indices(3, force_refresh=force_refresh)
                 
                 result = []
                 if res1:
@@ -716,7 +1024,7 @@ def fetch_data():
                             'time': match['time']
                         })
             elif symbol == "شاخص کل":
-                res = client.get_indices(1)
+                res = client.get_indices(1, force_refresh=force_refresh)
                 if res:
                     result = [{
                         'l18': "شاخص کل",
@@ -727,7 +1035,7 @@ def fetch_data():
                         'time': res.get('time')
                     }]
             elif symbol == "شاخص کل فرابورس":
-                res = client.get_indices(2)
+                res = client.get_indices(2, force_refresh=force_refresh)
                 if res:
                     result = [{
                         'l18': "شاخص کل فرابورس",
@@ -738,7 +1046,7 @@ def fetch_data():
                         'time': res.get('time')
                     }]
             else:
-                res = client.get_indices(3)
+                res = client.get_indices(3, force_refresh=force_refresh)
                 if isinstance(res, list):
                     # Find the specific index by name (symbol)
                     match = next((item for item in res if item['name'] == symbol), None)
@@ -758,7 +1066,7 @@ def fetch_data():
             if symbol == "all":
                 return jsonify({"error": "برای تحلیل تکنیکال یا تاریخچه، لطفاً یک شاخص مشخص را انتخاب کنید (نه 'همه موارد')."})
             # For market indices, we use the history API directly with adjusted=False
-            result = client.get_price_history(symbol, adjusted=False)
+            result = client.get_price_history(symbol, adjusted=False, force_refresh=force_refresh)
             if isinstance(result, list) and len(result) > 0:
                 result = TechnicalAnalyzer.prepare_ohlcv_data(result)
                 if service_type == 'technical':
@@ -775,8 +1083,9 @@ def fetch_data():
     elif asset_type == 'indices_industry':
         if service_type == 'realtime':
             # Calculate realtime proxy index by averaging pcp of all symbols in the sector
-            d1 = client.get_all_symbols("1")
-            d2 = client.get_all_symbols("2")
+            # Use force_refresh for getting symbols if requested
+            d1 = client.get_all_symbols("1", force_refresh=force_refresh)
+            d2 = client.get_all_symbols("2", force_refresh=force_refresh)
             data = []
             if isinstance(d1, list): data.extend(d1)
             if isinstance(d2, list): data.extend(d2)
@@ -822,8 +1131,8 @@ def fetch_data():
                 return jsonify({"error": "برای تحلیل تکنیکال یا تاریخچه صنعت، لطفاً یک صنعت مشخص را انتخاب کنید."})
             # For industry indices, we calculate a proxy index by averaging top symbols in that sector
             # Fetch from both Bourse and Farabourse to get all symbols in the sector
-            d1 = client.get_all_symbols("1")
-            d2 = client.get_all_symbols("2")
+            d1 = client.get_all_symbols("1", force_refresh=force_refresh)
+            d2 = client.get_all_symbols("2", force_refresh=force_refresh)
             data = []
             if isinstance(d1, list): data.extend(d1)
             if isinstance(d2, list): data.extend(d2)
@@ -832,12 +1141,11 @@ def fetch_data():
                 sector_symbols = [s for s in data if s.get('cs') == symbol]
                 if sector_symbols:
                     # Take top 5 symbols by market value (mv) or volume (v) to avoid hitting limits
-                    # We use mv (Market Value) if available, otherwise v (Volume)
                     top_symbols = sorted(sector_symbols, key=lambda x: float(x.get('mv') or x.get('v') or 0), reverse=True)[:5]
                     all_histories = []
                     for ts in top_symbols:
-                        # Use service="symbols" to bypass the 50% limit for internal industry calculation
-                        h = client.get_price_history(ts.get('l18'), adjusted=adjusted, service="symbols")
+                        # For industry components, we use user's refresh flag
+                        h = client.get_price_history(ts.get('l18'), adjusted=adjusted, service="symbols", force_refresh=force_refresh)
                         if isinstance(h, list):
                             all_histories.append(pd.DataFrame(h))
                     
@@ -875,19 +1183,19 @@ def fetch_data():
     elif service_type == 'heatmap':
         # Heatmap uses realtime data for all symbols in the selected market
         market_id = "1" if asset_type == 'bourse' else "2" if asset_type == 'fara_bourse' else "1"
-        result = client.get_all_symbols(market_id)
+        result = client.get_all_symbols(market_id, force_refresh=force_refresh)
     elif service_type == 'realtime':
         res = client.get_symbol_info(symbol)
         if res: result = [res]
     elif service_type == 'history':
-        result = client.get_price_history(symbol, adjusted=adjusted)
+        result = client.get_price_history(symbol, adjusted=adjusted, force_refresh=force_refresh)
         if timeframe == 'weekly' and isinstance(result, list):
             result = TechnicalAnalyzer.resample_to_weekly(result)
     elif service_type == 'technical':
         # Technical analysis ALWAYS uses daily history data for all assets
         # For indices, we use adjusted=False, for others we use the user's preference (default True)
         is_index = asset_type.startswith('indices')
-        result = client.get_price_history(symbol, adjusted=False if is_index else adjusted)
+        result = client.get_price_history(symbol, adjusted=False if is_index else adjusted, force_refresh=force_refresh)
         
         # Map history format (pc, pf, pmax, pmin, tvol) to standard OHLCV
         if isinstance(result, list) and len(result) > 0:
@@ -903,7 +1211,7 @@ def fetch_data():
         else:
             return jsonify({"error": "داده‌های تاریخی مورد نیاز برای تحلیل تکنیکال یافت نشد."})
     elif service_type == 'client_type':
-        result = client.get_price_history(symbol, data_type=1, adjusted=adjusted)
+        result = client.get_price_history(symbol, data_type=1, adjusted=adjusted, force_refresh=force_refresh)
     elif service_type == 'candlestick':
         result = client.get_candlestick(symbol, adjusted=adjusted)
     elif service_type == 'transactions':
@@ -916,7 +1224,7 @@ def fetch_data():
     elif service_type == 'codal':
         result = client.get_codal_announcements(symbol=symbol, category=codal_category, date_start=start_date, date_end=end_date)
     elif service_type == 'indices':
-        result = client.get_indices(asset_type)
+        result = client.get_indices(asset_type, force_refresh=force_refresh)
 
     if isinstance(result, dict) and "error" in result:
         return jsonify(result)
@@ -1026,9 +1334,13 @@ def generate_ai_package():
     
     if weekly_data:
         w_latest = weekly_data[0]
-        report += "## 3. Weekly Multi-Timeframe Analysis\n"
-        report += f"- **Weekly Signal:** {w_latest.get('Signal')}\n"
-        report += f"- **Weekly RSI:** {w_latest.get('RSI')}\n\n"
+        report += "## 3. Weekly Multi-Timeframe Analysis (MTF)\n"
+        report += f"- **Weekly Trend Signal:** {w_latest.get('Signal')}\n"
+        report += f"- **Weekly Pattern:** {w_latest.get('Pattern')}\n"
+        report += f"- **Weekly RSI (14):** {w_latest.get('RSI')}\n"
+        report += f"- **Weekly MACD:** {w_latest.get('MACD')}\n"
+        report += f"- **Weekly SMA20/50:** {'Bullish' if (w_latest.get('SMA20') or 0) > (w_latest.get('SMA50') or 0) else 'Bearish'}\n\n"
+        report += "Note: Weekly indicators provide a broader view of the long-term trend.\n\n"
 
     report += "## 4. Historical Data Tables\n"
     report += "### Daily (Last 30 Periods)\n"
@@ -1223,21 +1535,52 @@ def download():
 
 @app.route('/api/market_status')
 def get_market_status():
-    global_stats = {"total": 0, "success": 0, "blocked": 0}
-    for s in stats["services"].values():
-        global_stats["total"] += s["total"]
-        global_stats["success"] += s["success"]
-        global_stats["blocked"] += s["blocked"]
-        
     return jsonify({
         'status': 'در حال فعالیت', 
         'time': datetime.now().strftime('%H:%M:%S'),
         'stats': {
-            'global': global_stats,
-            'services': stats
+            'global': stats["global"],
+            'services': stats["services"]
         }
     })
 
+def startup_sync_worker():
+    """
+    Background worker that runs at startup.
+    Extreme caution protocol enabled: Long gaps, high jitter, sequential.
+    """
+    print("DEBUG: Starting ULTRA-CAUTIOUS background sync worker...")
+    # Give the server plenty of time to stabilize
+    time.sleep(30) # Shifting to 30s to allow UI to breathe
+    
+    # Check all 5 API types
+    for type_code in range(1, 6):
+        db_category = f"api_type_{type_code}"
+        
+        try:
+            # ONLY SYNC IF ABSOLUTELY EMPTY
+            if db.is_market_empty(db_category):
+                print(f"DEBUG: Registry for {db_category} is empty. Initializing sequential discovery...")
+                # We use a special flag to tell make_request to be even gentler
+                client._fetch_symbols_by_type(type_code, force_refresh=True)
+                
+                # ULTRA-CAUTIOUS: Wait 45-90 seconds between large discovery calls
+                jitter = random.uniform(45.0, 90.0)
+                print(f"DEBUG: Sync for Type {type_code} finished. Cooling down for {jitter:.1f}s...")
+                time.sleep(jitter)
+            else:
+                print(f"DEBUG: Registry for {db_category} is already populated.")
+        except Exception as e:
+            print(f"DEBUG: Error in cautious background sync for Type {type_code}: {e}")
+            time.sleep(60)
+
+    print("DEBUG: ULTRA-CAUTIOUS Background sync worker finished.")
+
 if __name__ == '__main__':
+    # Start auto-sync thread to populate empty registry
+    # Ensure it only runs once in debug mode
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+        threading.Thread(target=startup_sync_worker, daemon=True).start()
+    
     print("Starting Flask server on http://0.0.0.0:5000 ...")
     app.run(debug=True, host='0.0.0.0', port=5000)
