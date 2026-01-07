@@ -46,10 +46,18 @@ class SymbolDatabase:
             ''')
             
             # MIGRATION: Ensure all columns exist in symbols table
-            try:
-                cursor.execute("ALTER TABLE symbols ADD COLUMN market_category TEXT")
-            except sqlite3.OperationalError:
-                pass # Already exists
+            columns = {
+                "symbol_l18": "TEXT",
+                "name_l30": "TEXT",
+                "market_category": "TEXT",
+                "raw_data": "TEXT",
+                "last_updated": "TIMESTAMP"
+            }
+            for col_name, col_type in columns.items():
+                try:
+                    cursor.execute(f"ALTER TABLE symbols ADD COLUMN {col_name} {col_type}")
+                except sqlite3.OperationalError:
+                    pass # Already exists
                 
             conn.commit()
 
