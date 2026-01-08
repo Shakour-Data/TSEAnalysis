@@ -114,16 +114,6 @@ def fetch_data():
     
     if asset_type == 'tgju':
         result = tgju_client.get_history(symbol)
-    else:
-        if service_type == 'realtime':
-            result = client.get_realtime_data(symbol)
-        elif service_type == 'history':
-            result = client.get_history(symbol, adjusted=adjusted, count=candle_count)
-
-    if isinstance(result, list) and not ("error" in str(result)[:50]):
-        cache.set(cache_key, result)
-        
-    return jsonify(result)
     elif asset_type == 'indices_market':
         if service_type == 'realtime':
             res1 = client.get_indices(1, force_refresh=force_refresh)
@@ -137,16 +127,17 @@ def fetch_data():
                 result.append({'l18': 'شاخص کل فرابورس', 'pc': item.get('value') or item.get('index')})
         elif service_type in ['history', 'technical']:
             result = client.get_price_history(symbol, adjusted=False, force_refresh=force_refresh)
-    elif service_type == 'realtime':
-        res = client.get_symbol_info(symbol)
-        if res: result = [res]
-    elif service_type in ['history', 'technical']:
-        result = client.get_price_history(symbol, adjusted=adjusted, force_refresh=force_refresh)
+    else: # Default normal symbol
+        if service_type == 'realtime':
+            res = client.get_symbol_info(symbol)
+            result = [res] if res else []
+        elif service_type in ['history', 'technical']:
+            result = client.get_price_history(symbol, adjusted=adjusted, force_refresh=force_refresh)
 
     # Handle error response (but don't error if it's mock data)
     if isinstance(result, dict) and "error" in result and not force_refresh:
         # If real API failed, try mock fallback once
-        print(f"DEBUG: Primary fetch failed for {symbol}, attempting mock fallback...")
+        logger.info(f"Primary fetch failed for {symbol}, attempting mock fallback...")
         result = client._generate_mock_history(symbol)
 
     if isinstance(result, dict) and "error" in result:
@@ -175,7 +166,7 @@ def fetch_data():
                     filtered.append(item)
                 result = filtered
             except Exception as e:
-                print(f"Date Filter Error: {e}")
+                logger.error(f"Date Filter Error: {e}")
 
         if timeframe == 'weekly': 
             result = TechnicalAnalyzer.resample_to_weekly(result)
@@ -187,7 +178,7 @@ def fetch_data():
                 buf = TechnicalAnalyzer.generate_chart_image(result, symbol, timeframe=timeframe)
                 if buf: result[0]['chart_image'] = base64.b64encode(buf.getvalue()).decode('utf-8')
             except Exception as e:
-                print(f"Chart Generation Error: {e}")
+                logger.error(f"Chart Generation Error: {e}")
 
     if result and isinstance(result, list) and candle_count:
         try: result = result[:int(candle_count)]
