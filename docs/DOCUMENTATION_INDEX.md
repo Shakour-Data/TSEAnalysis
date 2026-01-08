@@ -11,7 +11,7 @@
 ### 🌟 START HERE
 
 #### For Urdu Speakers (فارسی و اردو)
-1. **[SOLUTION_SUMMARY_URDU.md](SOLUTION_SUMMARY_URDU.md)** ⭐ Start here!
+1. **[SOLUTION_SUMMARY_URDU.md](reports/SOLUTION_SUMMARY_URDU.md)** ⭐ Start here!
    - خطا کی تفصیل اور حل
    - استعمال کی مثالیں
    - ٹیسٹ کے نتائج
@@ -23,13 +23,13 @@
    - عام سوالات
 
 #### For English Speakers
-1. **[VISUAL_SUMMARY.md](VISUAL_SUMMARY.md)** ⭐ Start here!
+1. **[VISUAL_SUMMARY.md](reports/VISUAL_SUMMARY.md)** ⭐ Start here!
    - Visual diagrams and flowcharts
    - Test results summary
    - Before vs After comparison
    - Easy to understand graphics
 
-2. **[README.md](README.md)** - Complete Overview
+2. **[README.md](../README.md)** - Complete Overview
    - Problem and solution at a glance
    - Documentation index
    - Code files modified
@@ -38,14 +38,14 @@
 
 ### 📊 Detailed Documentation
 
-3. **[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)** - Technical Deep Dive
+3. **[IMPLEMENTATION_STATUS.md](reports/IMPLEMENTATION_STATUS.md)** - Technical Deep Dive
    - Executive summary
    - Code implementation details
    - System architecture
    - Performance metrics
    - Deployment checklist
 
-4. **[FALLBACK_SYSTEM_REPORT.md](FALLBACK_SYSTEM_REPORT.md)** - System Design Report
+4. **[FALLBACK_SYSTEM_REPORT.md](reports/FALLBACK_SYSTEM_REPORT.md)** - System Design Report
    - Problem statement
    - Solution architecture
    - Mock data generation algorithm
