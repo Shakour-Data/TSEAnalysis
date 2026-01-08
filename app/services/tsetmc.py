@@ -65,59 +65,24 @@ class TSETMCClient:
         # Standardize Persian characters
         return text.replace('ي', 'ی').replace('ك', 'ک').strip()
 
-    def _classify_equity_market(self, symbol_data):
-        """
-        Determines the detailed market segment based on ISIN and Name patterns.
-        Used for intelligent filtering of 'Type 1' and 'Type 2' mixed data.
-        """
-        isin = symbol_data.get('isin', '')
-        cs_id = symbol_data.get('cs', '') # Industry Code
-        cs_name = symbol_data.get('cs_name', '')
-        flow = str(symbol_data.get('flow', ''))
-        market_name = symbol_data.get('market_name', '').lower()
-        ticker = symbol_data.get('l18', '')
+    def _classify_equity_market(self, s):
+        """Refined classification logic."""
+        isin = str(s.get('isin', ''))
+        cs_id = str(s.get('cs_id', '') or s.get('cs', ''))
+        cs_name = str(s.get('cs_name', ''))
+        flow = str(s.get('flow', ''))
+        market_name = str(s.get('market_name', '')).lower()
+        ticker = str(s.get('l18', ''))
 
-        if not isin: return "unknown"
-        
-        # Commodities (Kala/Energy)
-        if cs_id in ["67", "28", "32"] or \
-           any(k in ticker for k in ["سکه", "طلا", "زعف", "نفت", "برنج", "پسته", "میوه", "شمش"]):
-            return "kala"
-
-        if "انرژی" in market_name or "energy" in market_name:
-            return "energy"
-
-        # 1. ETFs and Funds (Critical check)
-        if cs_id == "68" or isin.startswith("IRO5") or "etf" in cs_name.lower() or "صندوق" in cs_name:
-            return "etf"
-        
-        # 2. Fixed Income / Bonds
-        if cs_id == "69" or isin.startswith(("IRO2", "IRO4", "IROB")) or any(k in cs_name for k in ["اوراق", "صکوک", "اجاره", "مرابحه", "منفعت", "گام"]):
-            return "fixed_income"
-            
-        # 3. Housing Facilities (Tashilat)
-        if cs_id == "59" or isin.startswith("IROL") or any(k in cs_name for k in ["تسهیلات", "مسکن"]) or ticker.startswith("تسه"):
-            return "tashilat"
-
-        # 4. Payeh (Base Market)
-        if flow in ["5", "6", "7", "8"] or any(k in market_name for k in ["پایه", "payeh", "زرد", "نارنجی", "قرمز"]):
-            return "base"
-        if isin.startswith("IRO7"):
-            return "base"
-
-        # 5. Farabourse
-        if flow in ["3", "4"] or any(k in market_name for k in ["فرابورس", "farabourse", "ifb", "پذیرفته", "پذيرفته"]):
-            return "farabourse"
-        if isin.startswith("IRO3"):
-            return "farabourse"
-
-        # 6. Bourse Tehran
-        if flow in ["1", "2"] or any(k in market_name for k in ["بورس", "bourse", "tse"]):
-            return "bourse"
-        if isin.startswith("IRO1"):
-            return "bourse"
-
-        # Default catch-all
+        if not isin or isin == "None": return "unknown"
+        if cs_id == "68" or isin.startswith("IRO5") or "etf" in cs_name.lower() or "صندوق" in cs_name or "صندوق" in ticker: return "etf"
+        if cs_id == "69" or isin.startswith(("IRO2", "IRO4", "IROB")) or any(k in cs_name for k in ["اوراق", "سکوک", "اجاره", "مرابحه", "منفعت", "گام"]): return "fixed_income"
+        if cs_id == "59" or isin.startswith("IROL") or any(k in cs_name for k in ["تسهیلات", "مسکن"]) or ticker.startswith("تسه"): return "tashilat"
+        if "انرژی" in market_name or "energy" in market_name or "انرژی" in cs_name: return "energy"
+        if cs_id in ["67", "28", "32"] or any(k in ticker for k in ["سکه", "طلا", "زعف", "نفت", "برنج", "پسته", "میوه", "شمش"]): return "commodity"
+        if flow in ["5", "6", "7", "8"] or any(k in market_name for k in ["پایه", "payeh", "زرد", "نارنجی", "قرمز"]) or isin.startswith("IRO7"): return "base"
+        if flow in ["3", "4"] or any(k in market_name for k in ["فرابورس", "farabourse", "ifb"]) or isin.startswith("IRO3"): return "farabourse"
+        if flow in ["1", "2"] or any(k in market_name for k in ["بورس", "bourse", "tse"]) or isin.startswith("IRO1"): return "bourse"
         return "bourse"
 
     def _fetch_symbols_by_type(self, api_type, force_refresh=False):
@@ -374,52 +339,28 @@ class TSETMCClient:
 
         result_symbols = []
         
-        if market_type == "1":  # Bourse
-            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
-            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
-            combined = []
-            if isinstance(u1, list): combined.extend(u1)
-            if isinstance(u2, list): combined.extend(u2)
-            result_symbols = self._filter_symbols(combined, ["bourse"])
+        # Mapping UI market_type keys to internal classification categories
+        market_map = {
+            "1": ["bourse"],
+            "2": ["farabourse"],
+            "4": ["base"],
+            "5": ["etf"],
+            "etf": ["etf"],
+            "fixed_income": ["fixed_income"],
+            "tashilat": ["tashilat"],
+            "commodity": ["commodity"],
+            "energy": ["energy"]
+        }
 
-        elif market_type == "2":  # FaraBourse
-            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
-            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
+        if market_type in market_map:
+            # We combine all discovery buckets (1-5) to ensure NO symbol is missed
+            # and classification decides where it belongs.
             combined = []
-            if isinstance(u2, list): combined.extend(u2)
-            if isinstance(u1, list): combined.extend(u1)
-            result_symbols = self._filter_symbols(combined, ["farabourse"])
-
-        elif market_type == "4":  # Payeh
-            combined = []
-            for t in ["1", "2", "3"]:
+            for t in ["1", "2", "3", "4", "5"]:
                 u = self._get_equity_universe(t, force_refresh=force_refresh)
                 if isinstance(u, list): combined.extend(u)
-            result_symbols = self._filter_symbols(combined, ["base"])
-
-        elif market_type == "3":  # Kala
-            combined = []
-            for t in ["2", "3"]:
-                u = self._get_equity_universe(t, force_refresh=force_refresh)
-                if isinstance(u, list): combined.extend(u)
-            result_symbols = self._filter_symbols(combined, ["kala"])
-
-        elif market_type == "5":  # ETF
-            u1 = self._get_equity_universe("1", force_refresh=force_refresh)
-            u2 = self._get_equity_universe("2", force_refresh=force_refresh)
-            f1 = self._filter_symbols(u1, ["etf"])
-            f2 = self._filter_symbols(u2, ["etf"])
-            merged_dict = {}
-            for s in (f1 + f2):
-                key = s.get('isin') or s.get('l18')
-                if key: merged_dict[key] = s
-            result_symbols = list(merged_dict.values())
-
-        elif market_type == "fixed_income":
-            result_symbols = self._fetch_symbols_by_type("4", force_refresh=force_refresh)
-
-        elif market_type == "tashilat":
-            result_symbols = self._fetch_symbols_by_type("5", force_refresh=force_refresh)
+            
+            result_symbols = self._filter_symbols(combined, market_map[market_type])
 
         elif market_type == "indices_market":
             lists = []
@@ -437,9 +378,13 @@ class TSETMCClient:
             result_symbols = lists
 
         elif market_type == "indices_industry":
-            equities = self._get_equity_universe()
-            if isinstance(equities, list):
-                sectors = sorted({self._normalize_text(s.get('cs')) for s in equities if s.get('cs')})
+            all_equities = []
+            for t in ["1", "2"]:
+                u = self._get_equity_universe(t, force_refresh=force_refresh)
+                if isinstance(u, list): all_equities.extend(u)
+            
+            if all_equities:
+                sectors = sorted({self._normalize_text(s.get('cs')) for s in all_equities if s.get('cs')})
                 result_symbols = [{"id": f"ind_{idx}", "l18": sector, "l30": f"شاخص صنعت {sector}"} for idx, sector in enumerate(sectors)]
 
         if isinstance(result_symbols, list):
