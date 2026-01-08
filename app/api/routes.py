@@ -8,6 +8,9 @@ import io
 import pandas as pd
 import base64
 import zipfile
+import logging
+import json
+import hashlib
 
 from app.services.tsetmc import client
 from app.services.tgju import tgju_client
@@ -16,6 +19,7 @@ from app.database import db
 from app.core_utils import PROXY_URL, stats
 from app import cache
 
+logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
@@ -63,27 +67,39 @@ def get_symbols(market_type):
 
 @main_bp.route('/api/sync_registry', methods=['POST'])
 def sync_registry():
-    """Manual trigger for persistent registry update."""
-    results = {}
-    for t in range(1, 6):
-        try:
-            data = client._fetch_symbols_by_type(str(t), force_refresh=True)
-            results[f"type_{t}"] = f"Success ({len(data)} symbols)" if isinstance(data, list) else "Failed"
-            if t < 5: time.sleep(random.uniform(5, 10))
-        except Exception as e:
-            results[f"type_{t}"] = str(e)
-    return jsonify({"status": "Complete", "details": results, "registry_count": db.get_total_symbols_count()})
+    """Manual trigger for persistent registry update. Runs in background."""
+    def run_sync():
+        logger.info("Starting manual registry synchronization...")
+        for t in range(1, 6):
+            try:
+                client._fetch_symbols_by_type(str(t), force_refresh=True)
+                logger.info(f"Sync complete for market type {t}")
+                if t < 5: time.sleep(random.uniform(5, 10))
+            except Exception as e:
+                logger.error(f"Sync failed for type {t}: {e}")
+        logger.info("Manual registry synchronization finished.")
+
+    threading.Thread(target=run_sync, daemon=True).start()
+    return jsonify({
+        "status": "Started", 
+        "message": "Registry synchronization started in the background.",
+        "registry_count": db.get_total_symbols_count()
+    })
 
 @main_bp.route('/api/fetch_data', methods=['POST'])
 def fetch_data():
     data = request.json
     force_refresh = data.get('refresh', False)
     
-    # Cache check
-    cache_key = str(data)
+    # Stable Cache key using MD5 hash of sorted JSON
+    data_str = json.dumps(data, sort_keys=True)
+    cache_key = hashlib.md5(data_str.encode()).hexdigest()
+    
     if not force_refresh:
         cached_res = cache.get(cache_key)
-        if cached_res: return jsonify(cached_res)
+        if cached_res: 
+            logger.debug(f"Cache hit for {data.get('symbol')}")
+            return jsonify(cached_res)
 
     asset_type = data.get('asset_type')
     symbol = data.get('symbol')
@@ -98,7 +114,16 @@ def fetch_data():
     
     if asset_type == 'tgju':
         result = tgju_client.get_history(symbol)
-            
+    else:
+        if service_type == 'realtime':
+            result = client.get_realtime_data(symbol)
+        elif service_type == 'history':
+            result = client.get_history(symbol, adjusted=adjusted, count=candle_count)
+
+    if isinstance(result, list) and not ("error" in str(result)[:50]):
+        cache.set(cache_key, result)
+        
+    return jsonify(result)
     elif asset_type == 'indices_market':
         if service_type == 'realtime':
             res1 = client.get_indices(1, force_refresh=force_refresh)

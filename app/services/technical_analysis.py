@@ -10,6 +10,9 @@ import jdatetime
 import io
 import base64
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TechnicalAnalyzer:
     """
@@ -162,7 +165,7 @@ class TechnicalAnalyzer:
             
             return weekly_df.to_dict('records')
         except Exception as e:
-            print(f"Resampling Error: {e}")
+            logger.error(f"Resampling Error: {e}")
             return data
 
     @staticmethod
@@ -431,7 +434,7 @@ class TechnicalAnalyzer:
                 
             return results
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
             return data
 
     @classmethod
@@ -529,7 +532,7 @@ class TechnicalAnalyzer:
             buf.seek(0)
             return buf
         except Exception as e:
-            print(f"Chart error: {e}")
+            logger.error(f"Chart error: {e}")
             return None
 
     @staticmethod

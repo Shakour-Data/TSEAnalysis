@@ -2,7 +2,10 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
+import logging
 from app.core_utils import SAFE_BROWSER_UA, update_stats
+
+logger = logging.getLogger(__name__)
 
 class TGJUClient:
     """
@@ -64,6 +67,7 @@ class TGJUClient:
             data = response.json()
             
             if data.get('s') != 'ok':
+                logger.error(f"TGJU API Error for {symbol}: {data.get('s')}")
                 return {"error": f"TGJU API Error: {data.get('s')}"}
 
             # TGJU returns: t (time), o (open), h (high), l (low), c (close), v (volume)
@@ -78,6 +82,7 @@ class TGJUClient:
             
             return df.to_dict('records')
         except Exception as e:
+            logger.error(f"TGJU Request failed for {symbol}: {e}")
             update_stats("tgju", "blocked")
             return {"error": str(e)}
 

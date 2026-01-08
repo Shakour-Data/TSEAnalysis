@@ -4,6 +4,8 @@ import time
 import random
 import threading
 import subprocess
+import shutil
+import logging
 from datetime import datetime
 from urllib.parse import urlencode, quote
 import pandas as pd
@@ -16,6 +18,8 @@ from app.core_utils import (
 )
 from app.database import db
 
+logger = logging.getLogger(__name__)
+
 class TSETMCClient:
     """
     Professional TSETMC Data Client.
@@ -27,8 +31,8 @@ class TSETMCClient:
     5. Integrated Industry Index (Proxy) Calculator
     """
     
-    MIN_REQUEST_GAP = 2.5      # SECONDS - ABSOLUTE MANDATORY MINIMUM
-    MAX_REQS_STRICT = 180       # PER 5 MINUTES (Slightly under 200 threshold)
+    MIN_REQUEST_GAP = 1.0      # Reduced for better concurrency
+    MAX_REQS_STRICT = 150       # PER 5 MINUTES (Safer threshold)
     WINDOW_SECONDS = 300       # 5 MINUTES
     
     CHROME_HEADERS = {
@@ -54,7 +58,7 @@ class TSETMCClient:
         if TLS_CLIENT_AVAILABLE: self.client_name = "TLS-Fingerprint-Spoof"
         elif CURL_CFFI_AVAILABLE: self.client_name = "CURL-Impersonate"
         else: self.client_name = "Native-Requests (High Risk)"
-        print(f"DEBUG: Initialized TSETMC Client via {self.client_name}")
+        logger.info(f"Initialized TSETMC Client via {self.client_name}")
 
     def _normalize_text(self, text):
         if not text: return ""
@@ -123,7 +127,7 @@ class TSETMCClient:
         
         # Logic for Refreshing the Registry
         if force_refresh:
-            print(f"DEBUG: Refreshing Registry for Type {api_type}...")
+            logger.info(f"Refreshing Registry for Type {api_type}...")
             data = self._make_request("Api/Tsetmc/AllSymbols.php", {"type": api_type}, service="discovery")
             if isinstance(data, list) and len(data) > 0:
                 # Save to Persistent Database
@@ -139,7 +143,7 @@ class TSETMCClient:
             return stored_data
             
         # If DB is empty, only then call API
-        print(f"DEBUG: Registry empty for Type {api_type}. Initializing fetch...")
+        logger.info(f"Registry empty for Type {api_type}. Initializing fetch...")
         data = self._make_request("Api/Tsetmc/AllSymbols.php", {"type": api_type}, service="discovery")
         if isinstance(data, list) and len(data) > 0:
             db.save_symbols(data, db_category)
@@ -178,49 +182,50 @@ class TSETMCClient:
         Enforces BrsApi Fair Use Policy and Anti-NGFW Timing.
         Absolute sequential execution via locking.
         """
-        now = time.time()
-        
-        # 0. Circuit Breaker
-        if now < self._cooling_until:
-            wait_time = self._cooling_until - now
-            time.sleep(wait_time)
+        with self._network_lock:
             now = time.time()
-
-        # 1. Human-Like Behavior
-        think_time = random.uniform(0.5, 1.5)
-        time.sleep(think_time)
-        now = time.time()
-
-        # 2. Mandatory gap
-        elapsed_since_last = now - self._last_network_call
-        if elapsed_since_last < self.MIN_REQUEST_GAP:
-            sleep_time = self.MIN_REQUEST_GAP - elapsed_since_last
-            time.sleep(sleep_time)
-            now = time.time() 
             
-        # 3. Rate limiting
-        self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
-        
-        if len(self._request_history) >= self.MAX_REQS_STRICT:
-            wait_needed = self.WINDOW_SECONDS - (now - self._request_history[0])
-            time.sleep(wait_needed + 2)
+            # 0. Circuit Breaker
+            if now < self._cooling_until:
+                wait_time = self._cooling_until - now
+                logger.warning(f"Circuit breaker active. Cooling for {wait_time:.1f}s")
+                time.sleep(wait_time)
+                now = time.time()
+
+            # 1. Human-Like Behavior
+            think_time = random.uniform(0.5, 1.5)
+            time.sleep(think_time)
             now = time.time()
+
+            # 2. Mandatory gap
+            elapsed_since_last = now - self._last_network_call
+            if elapsed_since_last < self.MIN_REQUEST_GAP:
+                sleep_time = self.MIN_REQUEST_GAP - elapsed_since_last
+                time.sleep(sleep_time)
+                now = time.time() 
+                
+            # 3. Rate limiting
             self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
             
-        self._last_network_call = now
-        self._request_history.append(now)
+            if len(self._request_history) >= self.MAX_REQS_STRICT:
+                wait_needed = self.WINDOW_SECONDS - (now - self._request_history[0])
+                logger.warning(f"Rate limit reached. Waiting {wait_needed + 2:.1f}s")
+                time.sleep(wait_needed + 2)
+                now = time.time()
+                self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
+                
+            self._last_network_call = now
+            self._request_history.append(now)
 
     def _make_request(self, endpoint, params=None, service=None):
         """
         Professional Resilient Request Handler.
-        Uses Thread-Locking for absolute sequential safety.
         """
-        with self._network_lock: # ABSOLUTE SEQUENTIAL ACCESS
-            return self._locked_make_request(endpoint, params, service)
+        # Call apply_fair_use_control which now handles the lock internally
+        self._apply_fair_use_control(endpoint)
+        return self._locked_make_request(endpoint, params, service)
 
     def _locked_make_request(self, endpoint, params=None, service=None):
-        self._apply_fair_use_control(endpoint)
-
         query = params.copy() if params else {}
         query["key"] = self.api_key
         
@@ -239,7 +244,7 @@ class TSETMCClient:
                     # Use absolute encoding (safe='') for Google Script redirects
                     encoded_target = quote(full_url, safe='')
                     bridge_request_url = f"{BRIDGE_URL}?url={encoded_target}"
-                    print(f"DEBUG: Trying Bridge for {endpoint}...")
+                    logger.debug(f"Trying Bridge for {endpoint}...")
                     resp = requests.get(bridge_request_url, timeout=30)
                     if resp.status_code == 200:
                         content = resp.text.strip()
@@ -248,22 +253,22 @@ class TSETMCClient:
                             if service: update_stats(service, "success")
                             return resp.json()
                         else:
-                            print(f"DEBUG: Bridge returned non-JSON: {content[:100]}")
+                            logger.debug(f"Bridge returned non-JSON: {content[:100]}")
                 except Exception as e:
-                    print(f"DEBUG: Bridge failed: {str(e)[:50]}")
+                    logger.error(f"Bridge failed: {str(e)[:50]}")
 
             for attempt in range(current_max):
                 tech_variant = attempt % 3
 
                 if attempt > 0:
                     wait = (attempt * (3 if is_discovery else 10)) + random.uniform(1, 3)
-                    print(f"DEBUG: Retrying {endpoint} (Attempt {attempt}, Tech {tech_variant})...")
+                    logger.info(f"Retrying {endpoint} (Attempt {attempt}, Tech {tech_variant})...")
                     time.sleep(wait)
 
                 # Tech 0: Curl
                 if tech_variant == 0 and self.curl_path:
                     try:
-                        print(f"DEBUG: Technique Curl for {endpoint}...")
+                        logger.debug(f"Technique Curl for {endpoint}...")
                         is_safe_mode = (attempt > 0) or (protocol == "http")
                         data = self._curl_fallback_request(url, query, force_http11=is_safe_mode)
                         if data and isinstance(data, (list, dict)) and "error" not in str(data)[:50]:
@@ -271,13 +276,13 @@ class TSETMCClient:
                             if service: update_stats(service, "success")
                             return data
                     except Exception as e:
-                        print(f"DEBUG: Curl failed: {str(e)[:50]}")
+                        logger.error(f"Curl failed: {str(e)[:50]}")
 
                 # Tech 1: cffi/tls
                 if tech_variant == 1:
                     if CURL_CFFI_AVAILABLE:
                         try:
-                            print(f"DEBUG: Technique CURL_CFFI for {endpoint}...")
+                            logger.debug(f"Technique CURL_CFFI for {endpoint}...")
                             if protocol == "https":
                                 resp = crequests.get(full_url, impersonate="chrome120", timeout=30, verify=False)
                             else:
@@ -287,11 +292,11 @@ class TSETMCClient:
                                 if service: update_stats(service, "success")
                                 return resp.json()
                         except Exception as e:
-                            print(f"DEBUG: CURL_CFFI failed: {str(e)[:50]}")
+                            logger.error(f"CURL_CFFI failed: {str(e)[:50]}")
                     
                     if TLS_CLIENT_AVAILABLE and protocol == "https":
                         try:
-                            print(f"DEBUG: Technique TLS_CLIENT for {endpoint}...")
+                            logger.debug(f"Technique TLS_CLIENT for {endpoint}...")
                             selected_id = random.choice(idents)
                             sess = tls_client.Session(client_identifier=selected_id, random_tls_extension_order=True)
                             if self.proxy: sess.proxies = {"http": self.proxy, "https": self.proxy}
@@ -301,19 +306,19 @@ class TSETMCClient:
                                 if service: update_stats(service, "success")
                                 return response.json()
                         except Exception as e:
-                            print(f"DEBUG: TLS_CLIENT failed: {str(e)[:50]}")
+                            logger.error(f"TLS_CLIENT failed: {str(e)[:50]}")
 
                 # Tech 2: Requests
                 if tech_variant == 2 or attempt == current_max - 1:
                     try:
-                        print(f"DEBUG: Technique Requests for {endpoint}...")
+                        logger.debug(f"Technique Requests for {endpoint}...")
                         resp = requests.get(full_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, verify=False)
                         if resp.status_code == 200:
                             self._consecutive_failures = 0
                             if service: update_stats(service, "success")
                             return resp.json()
                     except Exception as e:
-                        print(f"DEBUG: Requests failed: {str(e)[:50]}")
+                        logger.error(f"Requests failed: {str(e)[:50]}")
 
         if service: update_stats(service, "blocked")
         print(f"🚨 CRITICAL: All techniques failed for {endpoint}")
