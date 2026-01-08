@@ -13,7 +13,7 @@
 
 ### If you speak Urdu/Persian (اگر اردو بول رہے ہیں)
 
-**Start here**: [SOLUTION_SUMMARY_URDU.md](SOLUTION_SUMMARY_URDU.md)
+**Start here**: [reports/SOLUTION_SUMMARY_URDU.md](reports/SOLUTION_SUMMARY_URDU.md)
 - مسئلہ کی تفصیل (Problem explanation)
 - حل کی وضاحت (Solution explanation)  
 - نتائج کی مثالیں (Result examples)
@@ -28,13 +28,13 @@
 
 ### If you speak English
 
-**Start here**: [VISUAL_SUMMARY.md](VISUAL_SUMMARY.md)
+**Start here**: [reports/VISUAL_SUMMARY.md](reports/VISUAL_SUMMARY.md)
 - Visual diagrams and flowcharts
 - Before vs After comparison
 - Test results
 - Easy to understand
 
-**Then read**: [README.md](README.md)
+**Then read**: [../README.md](../README.md)
 - Complete overview
 - Technical architecture
 - How to use the system
@@ -43,7 +43,7 @@
 
 ### If you're a developer (تکنیکی تفصیلات چاہیے)
 
-**Start here**: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
+**Start here**: [reports/IMPLEMENTATION_STATUS.md](reports/IMPLEMENTATION_STATUS.md)
 - Complete technical details
 - Code implementation
 - System architecture
