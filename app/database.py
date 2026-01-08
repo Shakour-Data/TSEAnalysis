@@ -1,7 +1,10 @@
 import sqlite3
 import json
 import os
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class SymbolDatabase:
     """
@@ -12,6 +15,7 @@ class SymbolDatabase:
             # Detect project root (parent of app/ folder)
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             self.db_path = os.path.join(base_dir, "data", "tse_data.db")
+            print(f"DEBUG: Database path is {self.db_path}")
         else:
             self.db_path = db_path
         
@@ -26,6 +30,17 @@ class SymbolDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
+            # Check if symbols table has 'id' as primary key instead of 'isin'
+            # If so, we need to drop and recreate for the new schema
+            try:
+                cursor.execute("PRAGMA table_info(symbols)")
+                cols = cursor.fetchall()
+                if cols and cols[0][1] == 'id' and cols[0][5] == 1:
+                    logger.warning("Old database schema detected. Dropping 'symbols' table for migration...")
+                    cursor.execute("DROP TABLE symbols")
+            except Exception as e:
+                logger.error(f"Schema check failed: {e}")
+
             # 1. Symbol Master Registry (For offline search and firewall fallback)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS symbols (
