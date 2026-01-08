@@ -371,19 +371,23 @@
                     <div class="section-title">بازار معاملاتی</div>
                     <div class="px-2">
                         <select id="asset_type" class="form-select mb-3">
-                            <option value="">-- انتخاب بازار --</option>
-                            <optgroup label="بازارهای اصلی">
-                                <option value="1">بورس تهران</option>
-                                <option value="2">فرابورس ایران</option>
-                                <option value="5">صندوق‌های ETF</option>
-                                <option value="fixed_income">درآمد ثابت</option>
-                                <option value="3">بورس کالا و آتی</option>
+                            <option value="">-- انتخاب دقیق بازار --</option>
+                            <optgroup label="سهام و حق تقدم">
+                                <option value="1">بورس تهران (TSE)</option>
+                                <option value="2">فرابورس ایران (IFB)</option>
+                                <option value="4">بازار پایه (Payeh)</option>
                             </optgroup>
-                            <optgroup label="بازارهای پایه">
-                                <option value="4">بازار پایه</option>
+                            <optgroup label="صندوق‌ها و اوراق">
+                                <option value="5">صندوق‌های قابل معامله (ETF)</option>
+                                <option value="fixed_income">اوراق درآمد ثابت/بدهی</option>
+                                <option value="tashilat">تسهیلات مسکن (تسه)</option>
+                            </optgroup>
+                            <optgroup label="کالا و انرژی">
+                                <option value="commodity">بورس کالا و آتی</option>
+                                <option value="energy">بورس انرژی ایران</option>
                             </optgroup>
                             <optgroup label="شاخص‌ها">
-                                <option value="indices_market">شاخص‌های کل</option>
+                                <option value="indices_market">شاخص‌های کل و فرابورس</option>
                                 <option value="indices_industry">شاخص‌های صنایع</option>
                             </optgroup>
                             <optgroup label="بازارهای جهانی و ارز">
@@ -1109,6 +1113,10 @@
         updateServiceDesc();
 
         function populateSymbolSelect(symbols) {
+            if (!Array.isArray(symbols)) {
+                console.error("populateSymbolSelect expected array, got:", symbols);
+                symbols = [];
+            }
             symbolSelect.innerHTML = '';
             const defaultOpt = document.createElement('option');
             defaultOpt.value = '';
@@ -1213,7 +1221,14 @@
             updateServiceDesc();
 
             try {
-                const response = await fetch(`/api/symbols/${val}${refresh ? '?refresh=true' : ''}`);
+                const url = `/api/symbols/${val}${refresh ? '?refresh=true' : ''}`;
+                console.log(`Fetching symbols from ${url}...`);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`خطای سرور: ${response.status}`);
+                }
+
                 const symbols = await response.json();
                 if (symbols.error) {
                     symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
