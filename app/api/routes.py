@@ -10,6 +10,7 @@ import base64
 import zipfile
 
 from app.services.tsetmc import client
+from app.services.tgju import tgju_client
 from app.services.technical_analysis import TechnicalAnalyzer
 from app.database import db
 from app.core_utils import PROXY_URL, stats
@@ -51,6 +52,9 @@ def health_check():
 
 @main_bp.route('/api/symbols/<market_type>')
 def get_symbols(market_type):
+    if market_type == 'tgju':
+        return jsonify(tgju_client.get_all_symbols())
+        
     refresh = request.args.get('refresh', 'false').lower() == 'true'
     symbols = client.get_all_symbols(market_type, force_refresh=refresh)
     if isinstance(symbols, dict) and "error" in symbols:
@@ -92,7 +96,10 @@ def fetch_data():
 
     result = []
     
-    if asset_type == 'indices_market':
+    if asset_type == 'tgju':
+        result = tgju_client.get_history(symbol)
+            
+    elif asset_type == 'indices_market':
         if service_type == 'realtime':
             res1 = client.get_indices(1, force_refresh=force_refresh)
             res2 = client.get_indices(2, force_refresh=force_refresh)
