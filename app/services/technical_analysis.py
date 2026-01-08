@@ -579,4 +579,5 @@ class TechnicalAnalyzer:
                 "حد ضرر (SL)": sl,
                 "حد سود (TP)": target,
                 "توضیحات استراتژی": f"{style}: {desc}"
+            })
         return strategies
