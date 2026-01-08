@@ -572,12 +572,11 @@ class TechnicalAnalyzer:
 
         for p, risk, ret, hor, style, entry, target, sl, desc in archetypes:
             strategies.append({
-                "dimension": f"{p} - {risk} - {ret} - {hor}",
-                "style": style,
-                "entry": entry,
-                "target": f"{int(target):,}",
-                "stop_loss": f"{int(sl):,}",
-                "trigger": desc
-            })
-            
+                "پروفایل سرمایه‌گذار": f"{p} ({ret})",
+                "تیپ شخصیتی": risk,
+                "افق زمانی": hor,
+                "نقطه ورود": entry,
+                "حد ضرر (SL)": sl,
+                "حد سود (TP)": target,
+                "توضیحات استراتژی": f"{style}: {desc}"
         return strategies
