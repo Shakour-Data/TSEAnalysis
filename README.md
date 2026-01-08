@@ -13,27 +13,27 @@
 ## 📚 Documentation Files
 
 ### For Users (اردو میں - In Urdu)
-- **[SOLUTION_SUMMARY_URDU.md](SOLUTION_SUMMARY_URDU.md)** ← Start here!
+- **[SOLUTION_SUMMARY_URDU.md](docs/reports/SOLUTION_SUMMARY_URDU.md)** ← Start here!
   - Problem in Urdu
   - Solution explained
   - Usage examples
   - Test results
 
-- **[URDU_QUICK_START.md](URDU_QUICK_START.md)**
+- **[URDU_QUICK_START.md](docs/URDU_QUICK_START.md)**
   - سریع راہنما (Quick Reference)
   - علامات کا استعمال (How to use symbols)
   - ٹیسٹ کا طریقہ (Testing guide)
   - عام سوالات (FAQ)
 
 ### For Developers (English - Technical)
-- **[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)**
+- **[IMPLEMENTATION_STATUS.md](docs/reports/IMPLEMENTATION_STATUS.md)**
   - Complete technical implementation details
   - Code snippets and explanations
   - System architecture diagram
   - Performance metrics
   - Deployment checklist
 
-- **[FALLBACK_SYSTEM_REPORT.md](FALLBACK_SYSTEM_REPORT.md)**
+- **[FALLBACK_SYSTEM_REPORT.md](docs/reports/FALLBACK_SYSTEM_REPORT.md)**
   - Detailed technical report
   - Mock data generation algorithm
   - Test results with data samples
@@ -68,7 +68,7 @@
       use mock fallback
   ```
 
-### 3. test_fallback.py (New)
+### 3. [test_fallback.py](tests/test_fallback.py) (New)
 **Created**: Comprehensive test suite
 - Tests history data retrieval
 - Tests technical analysis
