@@ -1,6 +1,9 @@
 #!/bin/bash
 # TSEAnalysis Deployment Script for Linux/Unix
 
+# Ensure we are in the project root
+cd "$(dirname "$0")/.."
+
 set -e
 
 echo "==== Checking Requirements ===="
