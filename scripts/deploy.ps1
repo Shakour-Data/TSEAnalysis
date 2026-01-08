@@ -1,6 +1,9 @@
 # TSEAnalysis Deployment Script for Windows
 # This script automates: Venv creation, dependency installation, and server startup.
 
+# Ensure we are in the project root
+Set-Location "$PSScriptRoot\.."
+
 function Write-Header($headerMsg) {
     Write-Host "`n==== $headerMsg ====" -ForegroundColor Cyan
 }
