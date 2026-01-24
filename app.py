@@ -2,8 +2,6 @@ import os
 import json
 import shutil
 import subprocess
-import ssl
-import socket
 import time
 from urllib.parse import urlencode
 import pandas as pd
