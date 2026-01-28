@@ -343,6 +343,9 @@
                     <li class="nav-item">
                         <a class="nav-link py-2 px-4" href="/api_test"><i class="fa-solid fa-bolt me-2"></i> عیب‌یابی وب‌سرویس</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-2 px-4" href="/management"><i class="fa-solid fa-gauge-high me-2 text-warning"></i> مدیریت درخواست‌ها</a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -1078,9 +1081,9 @@
         function updateServiceDesc() {
             const activeLink = document.querySelector('.nav-link.active[data-value]');
             if (activeLink) {
-                serviceDesc.textContent = activeLink.dataset.desc || '';
+                if (serviceDesc) serviceDesc.textContent = activeLink.dataset.desc || '';
                 activeService = activeLink.dataset.value;
-                codalCategoryContainer.style.display = (activeService === 'codal') ? 'block' : 'none';
+                if (codalCategoryContainer) codalCategoryContainer.style.display = (activeService === 'codal') ? 'block' : 'none';
                 
                 // Show timeframe only for technical analysis
                 const timeframeFields = document.querySelector('[name="timeframe"]')?.closest('.col-lg-3');
@@ -1117,22 +1120,32 @@
                 console.error("populateSymbolSelect expected array, got:", symbols);
                 symbols = [];
             }
+            if (!symbolSelect) return;
             symbolSelect.innerHTML = '';
+            
+            const count = symbols.length;
             const defaultOpt = document.createElement('option');
             defaultOpt.value = '';
-            defaultOpt.textContent = symbols.length > 0 ? `انتخاب نماد (${symbols.length} مورد)...` : 'نمادی یافت نشد';
+            defaultOpt.textContent = count > 0 ? `انتخاب نماد (${count} مورد)...` : 'نمادی یافت نشد';
             symbolSelect.appendChild(defaultOpt);
 
             // Add "All" option for Indices or Codal
-            if (symbols.length > 0 && (assetTypeSelect.value.startsWith('indices') || activeService === 'codal')) {
+            if (count > 0 && assetTypeSelect && assetTypeSelect.value && (assetTypeSelect.value.startsWith('indices') || activeService === 'codal')) {
                 const allOpt = document.createElement('option');
                 allOpt.value = 'all';
                 allOpt.textContent = '--- همه موارد ---';
                 symbolSelect.appendChild(allOpt);
             }
 
+            // Sort symbols by ticker (l18)
+            const sortedSymbols = [...symbols].sort((a, b) => {
+                const aName = a.l18 || '';
+                const bName = b.l18 || '';
+                return aName.localeCompare(bName, 'fa');
+            });
+
             const fragment = document.createDocumentFragment();
-            symbols.forEach(s => {
+            sortedSymbols.forEach(s => {
                 const opt = document.createElement('option');
                 const val = s.l18 || s.id || s.isin || '';
                 opt.value = val;
@@ -1142,10 +1155,11 @@
             });
             symbolSelect.appendChild(fragment);
             symbolSelect.disabled = false;
+            if (symbolSearch) symbolSearch.disabled = false;
 
             // Better auto-selection logic
             if (symbols.length > 0) {
-                if (assetTypeSelect.value.includes('indices')) {
+                if (assetTypeSelect && assetTypeSelect.value.includes('indices')) {
                     // Indices usually use "all"
                     for (let i = 0; i < symbolSelect.options.length; i++) {
                         if (symbolSelect.options[i].value === 'all') {
@@ -1160,31 +1174,36 @@
             }
         }
 
-        symbolSearch.addEventListener('input', () => {
-            const term = normalizePersian(symbolSearch.value);
-            if (!term) { populateSymbolSelect(allSymbols); return; }
-            const filtered = allSymbols.filter(s => 
-                (s.l18 && normalizePersian(s.l18).includes(term)) || 
-                (s.l30 && normalizePersian(s.l30).includes(term)) ||
-                (s.isin && s.isin.toLowerCase().includes(term)) ||
-                (s.id && s.id.toString().includes(term))
-            );
-            populateSymbolSelect(filtered);
-        });
+        if (symbolSearch) {
+            symbolSearch.addEventListener('input', () => {
+                const term = normalizePersian(symbolSearch.value);
+                if (!term) { populateSymbolSelect(allSymbols); return; }
+                const filtered = allSymbols.filter(s => 
+                    (s.l18 && normalizePersian(s.l18).includes(term)) || 
+                    (s.l30 && normalizePersian(s.l30).includes(term)) ||
+                    (s.isin && s.isin.toLowerCase().includes(term)) ||
+                    (s.id && s.id.toString().includes(term))
+                );
+                populateSymbolSelect(filtered);
+            });
 
-        symbolSearch.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                if (symbolSelect.value) {
-                    btnFetch.click();
+            symbolSearch.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    if (symbolSelect && symbolSelect.value) {
+                        if (btnFetch) btnFetch.click();
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        const loadSymbols = async (refresh = false) => {
-            const val = assetTypeSelect.value;
+        const loadSymbols = async (refresh = false, manualVal = null) => {
+            const val = manualVal || (assetTypeSelect ? assetTypeSelect.value : null);
             if (!val) {
-                symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
-                symbolSelect.disabled = true;
+                if (symbolSelect) {
+                    symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
+                    symbolSelect.disabled = true;
+                }
+                if (symbolSearch) symbolSearch.disabled = true;
                 return;
             }
 
@@ -1195,11 +1214,15 @@
                 return;
             }
 
-            symbolSelect.innerHTML = `<option value="">در حال بارگذاری نمادها${refresh ? ' (بروزرسانی)' : ''}...</option>`;
-            symbolSelect.disabled = true;
-            symbolSearch.disabled = true;
-            btnFetch.disabled = true;
-            symbolSearch.value = '';
+            if (symbolSelect) {
+                symbolSelect.innerHTML = `<option value="">در حال بارگذاری نمادها${refresh ? ' (بروزرسانی)' : ''}...</option>`;
+                symbolSelect.disabled = true;
+            }
+            if (symbolSearch) {
+                symbolSearch.disabled = true;
+                symbolSearch.value = '';
+            }
+            if (btnFetch) btnFetch.disabled = true;
             // Don't clear allSymbols immediately to keep the UI stable if possible
 
             if (val.includes('indices')) {
@@ -1213,7 +1236,8 @@
                 });
                 const activeLink = document.querySelector('#analysis_list .nav-link.active');
                 if (activeLink && activeLink.classList.contains('disabled')) {
-                    document.querySelector('#analysis_list .nav-link[data-value="technical"]').click();
+                    const techLink = document.querySelector('#analysis_list .nav-link[data-value="technical"]');
+                    if (techLink) techLink.click();
                 }
             } else {
                 serviceLinks.forEach(link => link.classList.remove('disabled'));
@@ -1222,7 +1246,6 @@
 
             try {
                 const url = `/api/symbols/${val}${refresh ? '?refresh=true' : ''}`;
-                console.log(`Fetching symbols from ${url}...`);
                 const response = await fetch(url);
                 
                 if (!response.ok) {
@@ -1230,12 +1253,12 @@
                 }
 
                 const symbols = await response.json();
-                if (symbols.error) {
-                    symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
+                if (symbols && symbols.error) {
+                    if (symbolSelect) symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
                     if (refresh) {
                         alert(`مشکل در بروزرسانی: ${symbols.error}`);
                     }
-                } else {
+                } else if (symbols) {
                     allSymbols = symbols;
                     symbolBrowserCache[val] = symbols; // Save to session cache
                     populateSymbolSelect(allSymbols);
@@ -1244,135 +1267,167 @@
                     }
                 }
             } catch (e) {
-                symbolSelect.innerHTML = `<option value="">خطا در ارتباط با سرور</option>`;
-                console.error(e);
+                if (symbolSelect) symbolSelect.innerHTML = `<option value="">خطا در ارتباط با سرور</option>`;
+                console.error("Load Symbols Error:", e);
             } finally {
-                btnFetch.disabled = false;
-                symbolSelect.disabled = false;
-                symbolSearch.disabled = false;
-                btnRefreshSymbols.innerHTML = '<i class="fa-solid fa-rotate"></i>';
-                btnRefreshSymbols.disabled = false;
+                if (btnFetch) btnFetch.disabled = false;
+                // symbolSelect and symbolSearch are enabled inside populateSymbolSelect if successful
+                // but we ensure they are enabled here if they were left disabled by an error
+                if (symbolSelect && symbolSelect.innerHTML.includes('خطا')) {
+                    symbolSelect.disabled = false;
+                    if (symbolSearch) symbolSearch.disabled = false;
+                }
+                if (btnRefreshSymbols) {
+                    btnRefreshSymbols.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+                    btnRefreshSymbols.disabled = false;
+                }
             }
         };
 
-        btnRefreshSymbols.addEventListener('click', () => loadSymbols(true));
-        assetTypeSelect.addEventListener('change', () => loadSymbols(false));
+        if (assetTypeSelect) {
+            assetTypeSelect.addEventListener('change', (e) => {
+                loadSymbols(false, e.target.value);
+                // UX: Auto-focus search after market selection
+                setTimeout(() => { if (symbolSearch) symbolSearch.focus(); }, 100);
+            });
+
+            // Initial load check for browser autocompleted values
+            if (assetTypeSelect.value) {
+                loadSymbols(false, assetTypeSelect.value);
+            }
+        }
+
+        if (btnRefreshSymbols) {
+            btnRefreshSymbols.addEventListener('click', () => {
+                btnRefreshSymbols.disabled = true;
+                btnRefreshSymbols.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                loadSymbols(true);
+            });
+        }
         
         document.getElementById('btn_add_watchlist')?.addEventListener('click', addToWatchlist);
 
-        btnFetch.addEventListener('click', async () => {
-            const assetType = assetTypeSelect.value;
-            const symbol = symbolSelect.value;
-            let serviceType = activeService;
-            const candleCount = document.getElementById('candle_count').value;
+        if (btnFetch) {
+            btnFetch.addEventListener('click', async () => {
+                const assetType = assetTypeSelect ? assetTypeSelect.value : null;
+                const symbol = symbolSelect ? symbolSelect.value : null;
+                let serviceType = activeService;
+                const candleCountEl = document.getElementById('candle_count');
+                const candleCount = candleCountEl ? candleCountEl.value : 200;
 
-            let startDate = document.getElementById('start_date').value;
-            let endDate = document.getElementById('end_date').value;
-            const adjusted = document.getElementById('adjusted_prices').checked;
-            const force_refresh = document.getElementById('force_refresh').checked;
+                let startDateEl = document.getElementById('start_date');
+                let startDate = startDateEl ? startDateEl.value : '';
+                let endDateEl = document.getElementById('end_date');
+                let endDate = endDateEl ? endDateEl.value : '';
+                
+                const adjustedEl = document.getElementById('adjusted_prices');
+                const adjusted = adjustedEl ? adjustedEl.checked : true;
+                const forceRefreshEl = document.getElementById('force_refresh');
+                const force_refresh = forceRefreshEl ? forceRefreshEl.checked : false;
 
-            if (startDate) startDate = startDate.replace(/\//g, '-');
-            if (endDate) endDate = endDate.replace(/\//g, '-');
+                if (startDate) startDate = startDate.replace(/\//g, '-');
+                if (endDate) endDate = endDate.replace(/\//g, '-');
 
-            if (!assetType) {
-                alert('لطفا ابتدا بازار را انتخاب کنید');
-                return;
-            }
-            if (!symbol) {
-                alert('لطفا یک نماد را انتخاب کنید یا جستجو نمایید');
-                return;
-            }
-
-            loading.style.display = 'block';
-            resultContainer.style.display = 'none';
-            btnFetch.disabled = true;
-            
-            // Clear previous data
-            currentData = [];
-            currentWeeklyData = [];
-
-            try {
-                if (serviceType === 'technical') {
-                    // Fetch both formats simultaneously for instant switching
-                    const [dailyRes, weeklyRes] = await Promise.all([
-                        fetch('/api/fetch_data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                asset_type: assetType, symbol, service_type: 'technical',
-                                start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'daily', candle_count: candleCount,
-                                refresh: force_refresh
-                            })
-                        }).then(r => r.json()),
-                        fetch('/api/fetch_data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                asset_type: assetType, symbol, service_type: 'technical',
-                                start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'weekly', candle_count: candleCount,
-                                refresh: force_refresh
-                            })
-                        }).then(r => r.json())
-                    ]);
-
-                    if (dailyRes.error || weeklyRes.error) {
-                        alert('خطا: ' + (dailyRes.error || weeklyRes.error));
-                    } else {
-                        currentData = dailyRes;
-                        currentWeeklyData = weeklyRes;
-                        
-                        // Default to daily for the table render but respect current toggle for the view
-                        renderTable(currentData, currentWeeklyData);
-                        switchTimeframe(currentTimeframe);
-
-                        // Fetch Strategy Matrix independently
-                        fetch('/api/ai_package', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                symbol: symbol,
-                                data: currentData,
-                                weekly_data: currentWeeklyData
-                            })
-                        }).then(r => r.json()).then(res => {
-                            if (res.strategy) {
-                                renderStrategyMatrix(res.strategy);
-                            }
-                        }).catch(e => console.error("Strategy Fetch Error:", e));
-                    }
-                } else {
-                    const response = await fetch('/api/fetch_data', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            asset_type: assetType,
-                            symbol,
-                            service_type: serviceType,
-                            start_date: startDate,
-                            end_date: endDate,
-                            adjusted: adjusted,
-                            candle_count: candleCount,
-                            codal_category: codalCategorySelect.value,
-                            refresh: force_refresh
-                        })
-                    });
-                    currentData = await response.json();
-                    if (currentData.error) {
-                        alert('خطا: ' + currentData.error);
-                    } else {
-                        renderTable(currentData);
-                    }
+                if (!assetType) {
+                    alert('لطفا ابتدا بازار را انتخاب کنید');
+                    return;
                 }
-                updateMarketStatus();
-            } catch (e) {
-                alert('خطا در دریافت داده');
-            } finally {
-                loading.style.display = 'none';
-                btnFetch.disabled = false;
-            }
-        });
+                if (!symbol) {
+                    alert('لطفا یک نماد را انتخاب کنید یا جستجو نمایید');
+                    return;
+                }
+
+                if (loading) loading.style.display = 'block';
+                if (resultContainer) resultContainer.style.display = 'none';
+                btnFetch.disabled = true;
+                
+                // Clear previous data
+                currentData = [];
+                currentWeeklyData = [];
+
+                try {
+                    if (serviceType === 'technical') {
+                        // Fetch both formats simultaneously for instant switching
+                        const [dailyRes, weeklyRes] = await Promise.all([
+                            fetch('/api/fetch_data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    asset_type: assetType, symbol, service_type: 'technical',
+                                    start_date: startDate, end_date: endDate, adjusted,
+                                    timeframe: 'daily', candle_count: candleCount,
+                                    refresh: force_refresh
+                                })
+                            }).then(r => r.json()),
+                            fetch('/api/fetch_data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    asset_type: assetType, symbol, service_type: 'technical',
+                                    start_date: startDate, end_date: endDate, adjusted,
+                                    timeframe: 'weekly', candle_count: candleCount,
+                                    refresh: force_refresh
+                                })
+                            }).then(r => r.json())
+                        ]);
+
+                        if (dailyRes.error || weeklyRes.error) {
+                            alert('خطا: ' + (dailyRes.error || weeklyRes.error));
+                        } else {
+                            currentData = dailyRes;
+                            currentWeeklyData = weeklyRes;
+                            
+                            // Default to daily for the table render but respect current toggle for the view
+                            renderTable(currentData, currentWeeklyData);
+                            switchTimeframe(currentTimeframe);
+
+                            // Fetch Strategy Matrix independently
+                            fetch('/api/ai_package', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    symbol: symbol,
+                                    data: currentData,
+                                    weekly_data: currentWeeklyData
+                                })
+                            }).then(r => r.json()).then(res => {
+                                if (res.strategy) {
+                                    renderStrategyMatrix(res.strategy);
+                                }
+                            }).catch(e => console.error("Strategy Fetch Error:", e));
+                        }
+                    } else {
+                        const response = await fetch('/api/fetch_data', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                asset_type: assetType,
+                                symbol,
+                                service_type: serviceType,
+                                start_date: startDate,
+                                end_date: endDate,
+                                adjusted: adjusted,
+                                candle_count: candleCount,
+                                codal_category: codalCategorySelect ? codalCategorySelect.value : '',
+                                refresh: force_refresh
+                            })
+                        });
+                        currentData = await response.json();
+                        if (currentData.error) {
+                            alert('خطا: ' + currentData.error);
+                        } else {
+                            renderTable(currentData);
+                        }
+                    }
+                    if (typeof updateMarketStatus === 'function') updateMarketStatus();
+                } catch (e) {
+                    alert('خطا در دریافت داده');
+                } finally {
+                    if (loading) loading.style.display = 'none';
+                    btnFetch.disabled = false;
+                }
+            });
+        }
 
         function renderStrategyMatrix(matrix) {
             const body = document.getElementById('strategy_matrix_body');
@@ -2070,20 +2125,29 @@
         
         // Add Clock/Date Logic
         function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const dateStr = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            }).format(now);
-            
-            const timeEl = document.getElementById('current_time');
-            if (timeEl) {
-                timeEl.innerText = timeStr;
-                const dateEl = timeEl.nextElementSibling;
-                if (dateEl) dateEl.innerText = dateStr;
+            try {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                let dateStr = "امروز";
+                try {
+                    dateStr = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    }).format(now);
+                } catch(e) {
+                    dateStr = now.toLocaleDateString('fa-IR');
+                }
+                
+                const timeEl = document.getElementById('current_time');
+                if (timeEl) {
+                    timeEl.innerText = timeStr;
+                    const dateEl = timeEl.nextElementSibling;
+                    if (dateEl) dateEl.innerText = dateStr;
+                }
+            } catch (err) {
+                console.error("Clock update failed", err);
             }
         }
         setInterval(updateClock, 1000);
