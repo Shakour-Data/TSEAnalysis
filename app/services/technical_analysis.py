@@ -336,10 +336,12 @@ class TechnicalAnalyzer:
                 df['RSI'] = ta.momentum.rsi(df['close'], window=14)
                 df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])
                 df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
+                df['STOCHk'] = ta.momentum.stoch(df['high'], df['low'], df['close'], window=14, smooth_window=3)
             else:
                 df['RSI'] = None
                 df['ADX'] = None
                 df['ATR'] = None
+                df['STOCHk'] = None
 
             # Ichimoku
             if len(df) >= 52:
@@ -386,12 +388,22 @@ class TechnicalAnalyzer:
             
             def get_signals(row):
                 sigs = []
-                if row['SMA20'] > row['SMA50']: sigs.append('Bullish (SMA)')
-                elif row['SMA20'] < row['SMA50']: sigs.append('Bearish (SMA)')
-                if row['RSI'] < 30: sigs.append('Oversold')
-                elif row['RSI'] > 70: sigs.append('Overbought')
-                if row['MACD'] > row['MACD_Sig']: sigs.append('MACD Bullish')
-                if row['Ichimoku_Conv'] > row['Ichimoku_Base']: sigs.append('Ichimoku Bullish Cross')
+                try:
+                    if row.get('SMA20') and row.get('SMA50'):
+                        if row['SMA20'] > row['SMA50']: sigs.append('Bullish (SMA)')
+                        elif row['SMA20'] < row['SMA50']: sigs.append('Bearish (SMA)')
+                    
+                    if row.get('RSI'):
+                        if row['RSI'] < 30: sigs.append('Oversold')
+                        elif row['RSI'] > 70: sigs.append('Overbought')
+                    
+                    if row.get('MACD') and row.get('MACD_Sig'):
+                        if row['MACD'] > row['MACD_Sig']: sigs.append('MACD Bullish')
+                    
+                    if row.get('Ichimoku_Conv') and row.get('Ichimoku_Base'):
+                        if row['Ichimoku_Conv'] > row['Ichimoku_Base']: sigs.append('Ichimoku Bullish Cross')
+                except:
+                    pass
                 return ", ".join(sigs) if sigs else 'Neutral'
 
             df['Signal'] = df.apply(get_signals, axis=1)
@@ -437,8 +449,6 @@ class TechnicalAnalyzer:
             logger.error(f"Error: {e}")
             return data
 
-    @classmethod
-    @classmethod
     @classmethod
     def generate_chart_image(cls, data, symbol_name, timeframe='daily'):
         try:
@@ -490,6 +500,14 @@ class TechnicalAnalyzer:
             timeframe_label = "Weekly" if timeframe == 'weekly' else "Daily"
             tf_fa = "هفتگی" if timeframe == 'weekly' else "روزانه"
             
+            # Determine number of panels
+            num_panels = 2 # Basic price + volume
+            for ap in apds:
+                if 'panel' in ap and ap['panel'] >= num_panels:
+                    num_panels = ap['panel'] + 1
+            
+            p_ratios = (6, 2, 2, 2)[:num_panels]
+
             # Create subplots for better control
             fig, axes = mpf.plot(df_plot, type='candle', style=s, volume=True, 
                                  addplot=apds,
@@ -497,7 +515,7 @@ class TechnicalAnalyzer:
                                  title=f"Technical Analysis ({tf_fa}): {symbol_name}",
                                  ylabel='Price', ylabel_lower='Volume',
                                  returnfig=True, figsize=(15, 12),
-                                 panel_ratios=(6, 2, 2, 2)) # Increased volume panel height
+                                 panel_ratios=p_ratios) # Corrected panel ratios
 
             # Shamsi date conversion for X-axis
             def to_jalali(x, pos):
