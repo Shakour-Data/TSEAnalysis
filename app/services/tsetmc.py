@@ -66,23 +66,46 @@ class TSETMCClient:
         return text.replace('ي', 'ی').replace('ك', 'ک').strip()
 
     def _classify_equity_market(self, s):
-        """Refined classification logic."""
-        isin = str(s.get('isin', ''))
+        """Refined classification logic using ISIN and CS_ID."""
+        isin = str(s.get('isin', '') or s.get('id', ''))
         cs_id = str(s.get('cs_id', '') or s.get('cs', ''))
-        cs_name = str(s.get('cs_name', ''))
-        flow = str(s.get('flow', ''))
-        market_name = str(s.get('market_name', '')).lower()
+        cs_name = str(s.get('cs_name', '') or s.get('cs', ''))
         ticker = str(s.get('l18', ''))
+        market_name = str(s.get('market_name', '')).lower()
 
-        if not isin or isin == "None": return "unknown"
-        if cs_id == "68" or isin.startswith("IRO5") or "etf" in cs_name.lower() or "صندوق" in cs_name or "صندوق" in ticker: return "etf"
-        if cs_id == "69" or isin.startswith(("IRO2", "IRO4", "IROB")) or any(k in cs_name for k in ["اوراق", "سکوک", "اجاره", "مرابحه", "منفعت", "گام"]): return "fixed_income"
-        if cs_id == "59" or isin.startswith("IROL") or any(k in cs_name for k in ["تسهیلات", "مسکن"]) or ticker.startswith("تسه"): return "tashilat"
-        if "انرژی" in market_name or "energy" in market_name or "انرژی" in cs_name: return "energy"
-        if cs_id in ["67", "28", "32"] or any(k in ticker for k in ["سکه", "طلا", "زعف", "نفت", "برنج", "پسته", "میوه", "شمش"]): return "commodity"
-        if flow in ["5", "6", "7", "8"] or any(k in market_name for k in ["پایه", "payeh", "زرد", "نارنجی", "قرمز"]) or isin.startswith("IRO7"): return "base"
-        if flow in ["3", "4"] or any(k in market_name for k in ["فرابورس", "farabourse", "ifb"]) or isin.startswith("IRO3"): return "farabourse"
-        if flow in ["1", "2"] or any(k in market_name for k in ["بورس", "bourse", "tse"]) or isin.startswith("IRO1"): return "bourse"
+        if (not isin or isin == "None") and not cs_id: return "unknown"
+        
+        # 1. ETFs and Funds
+        if cs_id == "68" or isin.startswith("IRO5") or \
+           any(k in ticker for k in ["سکه", "طلا", "زعف", "نفت", "برنج", "پسته", "میوه", "شمش"]) or \
+           "etf" in cs_name.lower() or "صندوق" in cs_name or "صندوق" in ticker:
+            return "etf"
+        
+        # 2. Fixed Income / Bonds
+        if cs_id == "69" or isin.startswith(("IRO2", "IRO4", "IROB")) or \
+           any(k in cs_name for k in ["اوراق", "سکوک", "اجاره", "مرابحه", "منفعت", "گام"]):
+            return "fixed_income"
+            
+        # 3. Housing Facilities (Tashilat)
+        if cs_id == "59" or isin.startswith("IROL") or \
+           any(k in cs_name for k in ["تسهیلات", "مسکن"]) or ticker.startswith("تسه"):
+            return "tashilat"
+
+        # 4. Commodities/Kala (Some might be in type 3/4)
+        if cs_id in ["67", "28", "32"]:
+            return "commodity"
+
+        # 5. Market Segmentation via ISIN (Most reliable)
+        if isin.startswith("IRO7"): return "base"
+        if isin.startswith("IRO3"): return "farabourse"
+        if isin.startswith("IRO1"): return "bourse"
+
+        # 6. Fallback based on market_name if available
+        if any(k in market_name for k in ["پایه", "payeh", "زرد", "نارنجی", "قرمز"]): return "base"
+        if any(k in market_name for k in ["فرابورس", "farabourse", "ifb"]): return "farabourse"
+        if any(k in market_name for k in ["بورس", "bourse", "tse"]): return "bourse"
+
+        # Final Fallback
         return "bourse"
 
     def _fetch_symbols_by_type(self, api_type, force_refresh=False):
@@ -215,7 +238,7 @@ class TSETMCClient:
                         content = resp.text.strip()
                         if content.startswith(('[', '{')):
                             self._consecutive_failures = 0
-                            if service: update_stats(service, "success")
+                            if service: update_stats(service, "success", endpoint=endpoint)
                             return resp.json()
                         else:
                             logger.debug(f"Bridge returned non-JSON: {content[:100]}")
@@ -238,7 +261,7 @@ class TSETMCClient:
                         data = self._curl_fallback_request(url, query, force_http11=is_safe_mode)
                         if data and isinstance(data, (list, dict)) and "error" not in str(data)[:50]:
                             self._consecutive_failures = 0
-                            if service: update_stats(service, "success")
+                            if service: update_stats(service, "success", endpoint=endpoint)
                             return data
                     except Exception as e:
                         logger.error(f"Curl failed: {str(e)[:50]}")
@@ -254,7 +277,7 @@ class TSETMCClient:
                                 resp = crequests.get(full_url, timeout=30)
                             if resp.status_code == 200:
                                 self._consecutive_failures = 0
-                                if service: update_stats(service, "success")
+                                if service: update_stats(service, "success", endpoint=endpoint)
                                 return resp.json()
                         except Exception as e:
                             logger.error(f"CURL_CFFI failed: {str(e)[:50]}")
@@ -268,7 +291,7 @@ class TSETMCClient:
                             response = sess.get(full_url, headers=self.CHROME_HEADERS, timeout_seconds=45)
                             if response.status_code == 200:
                                 self._consecutive_failures = 0
-                                if service: update_stats(service, "success")
+                                if service: update_stats(service, "success", endpoint=endpoint)
                                 return response.json()
                         except Exception as e:
                             logger.error(f"TLS_CLIENT failed: {str(e)[:50]}")
@@ -280,12 +303,12 @@ class TSETMCClient:
                         resp = requests.get(full_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, verify=False)
                         if resp.status_code == 200:
                             self._consecutive_failures = 0
-                            if service: update_stats(service, "success")
+                            if service: update_stats(service, "success", endpoint=endpoint)
                             return resp.json()
                     except Exception as e:
                         logger.error(f"Requests failed: {str(e)[:50]}")
 
-        if service: update_stats(service, "blocked")
+        if service: update_stats(service, "blocked", endpoint=endpoint)
         print(f"🚨 CRITICAL: All techniques failed for {endpoint}")
         
         if not is_discovery:
