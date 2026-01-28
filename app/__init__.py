@@ -38,6 +38,7 @@ def create_app():
     
     # Preload logic - Run once in a thread
     def start_preload():
+        if app.testing: return # Don't preload in tests
         from app.services.tsetmc import client
         def background_preload():
             # Wait a few seconds for app to fully start
