@@ -39,19 +39,21 @@ except ImportError:
     tls_client = None
 
 # Configuration
-API_KEY = "BA9C8JBliDmfPapn9WYTX76uR5Q3m2r3"
-BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxyrNakdMLbd8YsUAIYfgA9E5cP_66MNGkoTekIdC4FQhFcf-0p8n1CXqrDuWJBiE4w/exec"
+API_KEY = "677e4860b2d6a"
+BRIDGE_URL = None
 PROXY_URL = None
 
 stats = {
     "global": {"total": 0, "blocked": 0, "success": 0},
-    "services": {}
+    "services": {},
+    "history": [] # Track last 50 requests
 }
 
-def update_stats(service, status):
+def update_stats(service, status, endpoint=None):
     global stats
     if service not in stats["services"]:
         stats["services"][service] = {"total": 0, "blocked": 0, "success": 0}
+    
     stats["global"]["total"] += 1
     stats["services"][service]["total"] += 1
 
@@ -61,3 +63,13 @@ def update_stats(service, status):
     elif status == "success":
         stats["global"]["success"] += 1
         stats["services"][service]["success"] += 1
+    
+    # Update History
+    from datetime import datetime
+    stats["history"].insert(0, {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "service": service,
+        "endpoint": endpoint or "Unknown",
+        "status": status
+    })
+    stats["history"] = stats["history"][:50]
