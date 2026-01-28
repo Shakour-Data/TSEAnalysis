@@ -63,7 +63,7 @@ class TGJUClient:
 
         try:
             response = requests.get(self.BASE_URL, params=params, headers=self.HEADERS, timeout=15)
-            update_stats("tgju", "success")
+            update_stats("tgju", "success", endpoint=f"history?symbol={symbol}")
             data = response.json()
             
             if data.get('s') != 'ok':
@@ -72,18 +72,18 @@ class TGJUClient:
 
             # TGJU returns: t (time), o (open), h (high), l (low), c (close), v (volume)
             df = pd.DataFrame({
-                'Date': pd.to_datetime(data['t'], unit='s').strftime('%Y-%m-%d'),
-                'Open': data['o'],
-                'High': data['h'],
-                'Low': data['l'],
-                'Close': data['c'],
-                'Volume': data['v']
+                'date': pd.to_datetime(data['t'], unit='s').strftime('%Y-%m-%d'),
+                'open': data['o'],
+                'high': data['h'],
+                'low': data['l'],
+                'close': data['c'],
+                'volume': data['v']
             })
             
             return df.to_dict('records')
         except Exception as e:
             logger.error(f"TGJU Request failed for {symbol}: {e}")
-            update_stats("tgju", "blocked")
+            update_stats("tgju", "blocked", endpoint=f"history?symbol={symbol}")
             return {"error": str(e)}
 
     def get_all_symbols(self):
