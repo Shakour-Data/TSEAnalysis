@@ -30,6 +30,15 @@ def index():
 def api_test():
     return render_template('api_test.html')
 
+@main_bp.route('/management')
+def management():
+    return render_template('management.html')
+
+@main_bp.route('/api/clear_cache', methods=['POST'])
+def clear_cache():
+    cache.clear()
+    return jsonify({"status": "success", "message": "حافظه موقت با موفقیت پاکسازی شد."})
+
 @main_bp.route('/api/market_status')
 def get_market_status():
     """Returns the current status of the market."""
@@ -38,7 +47,8 @@ def get_market_status():
         "time": datetime.now().strftime("%H:%M:%S"),
         "stats": {
             "global": stats["global"],
-            "services": stats["services"]
+            "services": stats["services"],
+            "history": stats["history"]
         }
     })
 
