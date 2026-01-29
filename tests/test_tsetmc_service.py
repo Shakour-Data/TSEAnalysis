@@ -40,6 +40,13 @@ def test_get_all_symbols_filtering(tsetmc_client):
         assert len(fara) == 1
         assert fara[0]["l18"] == "Fara1"
 
+def test_generate_mock_history(tsetmc_client):
+    mock_data = tsetmc_client._generate_mock_history("TEST")
+    assert isinstance(mock_data, list)
+    assert len(mock_data) > 0
+    assert "date" in mock_data[0]
+    assert "close" in mock_data[0] or "pc" in mock_data[0]
+
 @patch('app.services.tsetmc.crequests')
 def test_make_request_success(mock_crequests, tsetmc_client):
     mock_crequests.get.return_value.status_code = 200
