@@ -31,3 +31,10 @@ def test_stats_history_limit():
     
     assert len(stats["history"]) == 50 # Limit is 50
     assert stats["history"][0]["endpoint"] == "ep_99"
+
+def test_core_utils_imports():
+    from app.core_utils import TLS_CLIENT_AVAILABLE, CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE
+    # These are boolean flags, just check they are defined
+    assert isinstance(TLS_CLIENT_AVAILABLE, bool)
+    assert isinstance(CURL_CFFI_AVAILABLE, bool)
+    assert isinstance(HTTPX_AVAILABLE, bool)
