@@ -7,6 +7,8 @@ import threading
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ===== FIREWALL NUCLEAR OPTION =====
+# WARNING: These techniques may violate website TOS and could be illegal.
+# Use at your own risk. Consider using official APIs or proxies instead.
 SAFE_BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 requests.utils.default_user_agent = lambda: SAFE_BROWSER_UA
 
@@ -39,9 +41,9 @@ except ImportError:
     tls_client = None
 
 # Configuration
-API_KEY = "677e4860b2d6a"
-BRIDGE_URL = None
-PROXY_URL = None
+API_KEY = os.getenv('TSE_API_KEY', '677e4860b2d6a')
+BRIDGE_URL = os.getenv('BRIDGE_URL')
+PROXY_URL = os.getenv('PROXY_URL')
 
 stats = {
     "global": {"total": 0, "blocked": 0, "success": 0},
