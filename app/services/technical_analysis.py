@@ -444,6 +444,14 @@ class TechnicalAnalyzer:
                 except:
                     pass
                 
+                # Generate chart image
+                try:
+                    chart_buffer = cls.generate_chart_image(df)
+                    if chart_buffer:
+                        results[0]['chart_image'] = base64.b64encode(chart_buffer.getvalue()).decode('utf-8')
+                except Exception as e:
+                    logger.error(f"Chart generation failed: {e}")
+                
             return results
         except Exception as e:
             logger.error(f"Error: {e}")
@@ -602,3 +610,44 @@ class TechnicalAnalyzer:
                 "توضیحات استراتژی": f"{style}: {desc}"
             })
         return strategies
+
+    @staticmethod
+    def generate_chart_image(df):
+        """Generate candlestick chart with indicators as base64 image."""
+        if df.empty or len(df) < 10:
+            return None
+        
+        try:
+            # Prepare data for mplfinance
+            plot_df = df.copy()
+            if 'date' in plot_df.columns:
+                plot_df['date'] = pd.to_datetime(plot_df['date'], format='%Y-%m-%d')
+                plot_df.set_index('date', inplace=True)
+            
+            # Create subplots
+            fig = mpf.figure(figsize=(12, 8), style='charles')
+            ax1 = fig.add_subplot(211)
+            ax2 = fig.add_subplot(212)
+            
+            # Candlestick chart
+            mpf.plot(plot_df, type='candle', volume=ax2, ax=ax1, show_nontrading=False)
+            
+            # Add indicators if available
+            if 'SMA20' in plot_df.columns and plot_df['SMA20'].notna().any():
+                ax1.plot(plot_df.index, plot_df['SMA20'], label='SMA20', color='blue')
+            if 'BBU' in plot_df.columns and plot_df['BBU'].notna().any():
+                ax1.plot(plot_df.index, plot_df['BBU'], label='BB Upper', color='red', linestyle='--')
+            if 'BBL' in plot_df.columns and plot_df['BBL'].notna().any():
+                ax1.plot(plot_df.index, plot_df['BBL'], label='BB Lower', color='green', linestyle='--')
+            
+            ax1.legend()
+            
+            # Save to buffer
+            buffer = io.BytesIO()
+            fig.savefig(buffer, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buffer.seek(0)
+            return buffer
+        except Exception as e:
+            logger.error(f"Chart generation error: {e}")
+            return None
