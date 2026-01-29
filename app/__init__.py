@@ -28,7 +28,7 @@ def create_app():
                 static_folder='../static')
     
     # Configure Caching
-    app.config['CACHE_TYPE'] = 'filesystem'
+    app.config['CACHE_TYPE'] = 'FileSystemCache'
     app.config['CACHE_DIR'] = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cache')
     cache.init_app(app)
     

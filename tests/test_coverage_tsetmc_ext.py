@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from app.services.tsetmc import TSETMCClient
 
 @pytest.fixture
-def tsetmc_client():
+def tsetmc_client(db):
     return TSETMCClient(api_key="TEST_KEY")
 
 def test_make_request_techniques_exhaustive(tsetmc_client):
