@@ -317,11 +317,7 @@ class TSETMCClient:
                 self._cooling_until = time.time() + 60
                 self._consecutive_failures = 0 
 
-        return {
-            "error": "ارتباط با سرور بورس (brsapi.ir) توسط فایروال مسدود شد.",
-            "blocked": True,
-            "technical_info": "ConnectionReset/10054. Your server (OVH France) is blocked. Use Proxy Iran or a valid Bridge."
-        }
+        return None
 
     def _curl_fallback_request(self, url, params, force_http11=False):
         if not self.curl_path: return None
