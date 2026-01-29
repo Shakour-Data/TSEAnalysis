@@ -333,11 +333,11 @@ class TSETMCClient:
                 else: cmd += ["-x", self.proxy]
                     
             cmd = cmd + header_args + [full_url]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=35)
             
             if result.returncode == 35 or not result.stdout:
                 compat_cmd = cmd + ["--tlsv1.2", "--ciphers", "DEFAULT@SECLEVEL=1"]
-                result = subprocess.run(compat_cmd, capture_output=True, text=True, timeout=35)
+                result = subprocess.run(compat_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=35)
 
             body = result.stdout.strip().lstrip('\ufeff')
             if body and (body.startswith('[') or body.startswith('{')):
