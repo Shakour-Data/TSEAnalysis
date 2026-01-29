@@ -612,9 +612,9 @@ class TechnicalAnalyzer:
         return strategies
 
     @staticmethod
-    def generate_chart_image(df):
+    def generate_chart_image(df, symbol=None, timeframe='daily'):
         """Generate candlestick chart with indicators as base64 image."""
-        if df.empty or len(df) < 10:
+        if df is None or (hasattr(df, 'empty') and df.empty) or len(df) < 10:
             return None
         
         try:
