@@ -98,7 +98,12 @@ def sync_registry():
 
 @main_bp.route('/api/fetch_data', methods=['POST'])
 def fetch_data():
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+    
     data = request.json
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON data"}), 400
     force_refresh = data.get('refresh', False)
     
     # Stable Cache key using MD5 hash of sorted JSON
