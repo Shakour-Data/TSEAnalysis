@@ -48,6 +48,7 @@ def test_fetch_data_ta_signals(client):
         
         response = client.post('/api/fetch_data', json={
             "symbol": "FOO",
+            "service_type": "technical",
             "timeframe": "Daily",
             "indicators": ["RSI", "MACD"]
         })
