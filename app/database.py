@@ -29,6 +29,10 @@ class SymbolDatabase:
     def _init_db(self):
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA cache_size=1000;")
+            cursor.execute("PRAGMA temp_store=memory;")
             
             # Check if symbols table has 'id' as primary key instead of 'isin'
             # If so, we need to drop and recreate for the new schema
