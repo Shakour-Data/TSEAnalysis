@@ -21,7 +21,7 @@ def test_ta_calculate_technical_analysis_short():
 def test_ta_indicators_missing_cols():
     # Covers error paths when data is malformed
     # Needs at least 10 rows to even try
-    data = [{'date': f'2023-01-{i:02d}', 'open': 100, 'high': 105, 'low': 95, 'close': 100+i} for i in range(1, 15)]
+    data = [{'date': f'2023-01-{i:02d}', 'open': 100, 'high': 105, 'low': 95, 'close': 100+i} for i in range(1, 50)]
     res = TechnicalAnalyzer.calculate_technical_analysis(data)
     assert 'Signal' in res[0]
 
