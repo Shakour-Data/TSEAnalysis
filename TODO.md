@@ -1,9 +1,0 @@
-- [ ] Commit deleted .coverage file
-- [ ] Commit modified app/services/technical_analysis.py
-- [ ] Commit modified cache/2029240f6d1128be89ddc32729463129
-- [ ] Commit modified cache/f544e28acdd2e81b5adba8700aeb4c28
-- [ ] Commit modified tests/test_core_utils.py
-- [ ] Commit modified tests/test_coverage_routes.py
-- [ ] Commit modified tests/test_coverage_ta.py
-- [ ] Commit modified tests/test_tsetmc_service.py
-- [ ] Verify commits with git log --oneline -n 10
