@@ -53,7 +53,7 @@ foreach ($file in $files) {
     elseif ($file -match '^tests/') { $prefix = 'test' }
     elseif ($file -match '^app/.*\.py$') { $prefix = 'feat' }
 
-    $msg = "$prefix: update $file ($summary)"
+    $msg = "$($prefix): update $file ($summary)"
 
     # Show and confirm if requested
     if ($Confirm) {

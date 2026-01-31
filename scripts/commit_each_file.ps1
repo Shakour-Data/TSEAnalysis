@@ -56,7 +56,7 @@ foreach ($file in $staged) {
         $summary = "content update"
     }
 
-    $msg = "$prefix: update $file — $summary (per-file commit)"
+    $msg = "$($prefix): update $file — $summary (per-file commit)"
 
     # If DryRun, only record proposed commit (no actual git commit)
     if ($DryRun) {
