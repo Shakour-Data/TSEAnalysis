@@ -193,4 +193,13 @@ class SymbolDatabase:
             cursor.execute('SELECT COUNT(*) FROM symbols')
             return cursor.fetchone()[0]
 
+    def get_all_symbols(self):
+        """Retrieves all symbols from local storage."""
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT raw_data FROM symbols')
+            rows = cursor.fetchall()
+            return [json.loads(row['raw_data']) for row in rows]
+
 db = SymbolDatabase()

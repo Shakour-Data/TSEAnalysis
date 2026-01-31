@@ -31,8 +31,10 @@ except ImportError:
 try:
     import httpx
     HTTPX_AVAILABLE = True
-except ImportError:
+except Exception:
+    # Catch all exceptions including import issues
     httpx = None
+    HTTPX_AVAILABLE = False
 
 # Exporting for other modules
 try:

@@ -33,16 +33,36 @@ def create_app():
     cache.init_app(app)
     
     # Register Blueprints
-    from app.api.routes import main_bp
+    from app.api.routes import main_bp, update_bp
     app.register_blueprint(main_bp)
+    app.register_blueprint(update_bp)
     
     # Preload logic - Run once in a thread
     def start_preload():
         if app.testing: return # Don't preload in tests
         from app.services.tsetmc import client
+        from app.services.data_refresh import start_background_service
+        from app.services.incremental_updater import start_updater
+        
         def background_preload():
             # Wait a few seconds for app to fully start
             time.sleep(5)
+            
+            # Start continuous data refresh service
+            try:
+                start_background_service()
+                logger.info("✅ Background data refresh service started")
+            except Exception as e:
+                logger.warning(f"Could not start data refresh service: {e}")
+            
+            # Start incremental database updater
+            try:
+                symbols_per_day = 100  # آپدیت 100 نماد در روز
+                updater = start_updater(symbols_per_day=symbols_per_day)
+                logger.info(f"✅ Incremental database updater started ({symbols_per_day} symbols/day)")
+            except Exception as e:
+                logger.warning(f"Could not start database updater: {e}")
+            
             if db.get_total_symbols_count() < 100:
                 logger.info("🚀 STARTUP: Registry empty. Initiating background pre-warm...")
                 for t in ["1", "2"]:

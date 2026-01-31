@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 from app.core_utils import (
     SAFE_BROWSER_UA, update_stats, TLS_CLIENT_AVAILABLE, 
-    CURL_CFFI_AVAILABLE, crequests, tls_client, BRIDGE_URL,
+    CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE, crequests, tls_client, BRIDGE_URL,
     API_KEY, PROXY_URL
 )
 from app.database import db
@@ -296,11 +296,29 @@ class TSETMCClient:
                         except Exception as e:
                             logger.error(f"TLS_CLIENT failed: {str(e)[:50]}")
 
-                # Tech 2: Requests
-                if tech_variant == 2 or attempt == current_max - 1:
+                # Tech 2: HTTPX (Modern async client)
+                if tech_variant == 2:
+                    if HTTPX_AVAILABLE:
+                        try:
+                            logger.debug(f"Technique HTTPX for {endpoint}...")
+                            import httpx
+                            headers = self.CHROME_HEADERS.copy()
+                            with httpx.Client(timeout=30, verify=False, follow_redirects=True) as client:
+                                if self.proxy:
+                                    client.proxies = {"http://": self.proxy, "https://": self.proxy}
+                                resp = client.get(full_url, headers=headers)
+                                if resp.status_code == 200:
+                                    self._consecutive_failures = 0
+                                    if service: update_stats(service, "success", endpoint=endpoint)
+                                    return resp.json()
+                        except Exception as e:
+                            logger.error(f"HTTPX failed: {str(e)[:50]}")
+
+                # Tech 3: Requests (Fallback)
+                if attempt == current_max - 1:
                     try:
                         logger.debug(f"Technique Requests for {endpoint}...")
-                        resp = requests.get(full_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, verify=False)
+                        resp = requests.get(full_url, headers=self.CHROME_HEADERS, timeout=15, verify=False)
                         if resp.status_code == 200:
                             self._consecutive_failures = 0
                             if service: update_stats(service, "success", endpoint=endpoint)

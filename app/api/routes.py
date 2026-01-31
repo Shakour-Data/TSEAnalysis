@@ -15,12 +15,16 @@ import hashlib
 from app.services.tsetmc import client
 from app.services.tgju import tgju_client
 from app.services.technical_analysis import TechnicalAnalyzer
+from app.services.local_ai_assistant import ai_assistant
 from app.database import db
 from app.core_utils import PROXY_URL, stats
 from app import cache
 
 logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
+
+# Import updates routes
+from app.api.updates_routes import update_bp
 
 @main_bp.route('/')
 def index():
@@ -329,3 +333,46 @@ def download():
         buf = TechnicalAnalyzer.generate_chart_image(df, symbol, timeframe=timeframe)
         return send_file(buf, download_name=f"{symbol}.png", as_attachment=True, mimetype='image/png')
     return jsonify({"error": "Format not supported"}), 400
+
+@main_bp.route('/api/ai/analyze/<symbol>', methods=['GET'])
+def ai_analyze_symbol(symbol):
+    """AI-powered technical analysis for a symbol."""
+    try:
+        result = ai_assistant.analyze_symbol(symbol)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/ai/report', methods=['POST'])
+def ai_generate_report():
+    """Generate a professional report based on user query."""
+    try:
+        data = request.json
+        query = data.get('query', 'گزارش کلی بازار را ارائه دهید')
+        result = ai_assistant.generate_report(query)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/ai/update_model', methods=['POST'])
+def ai_update_model():
+    """Update the AI model with new data."""
+    try:
+        ai_assistant.update_model()
+        return jsonify({"message": "AI model updated successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/ai/status', methods=['GET'])
+def ai_status():
+    """Get AI learning status."""
+    try:
+        status = {
+            "model_loaded": ai_assistant.model is not None,
+            "last_update": ai_assistant.last_update.isoformat(),
+            "continuous_learning_active": ai_assistant.learning_thread.is_alive(),
+            "model_path": ai_assistant.model_path
+        }
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
