@@ -1,8 +1,10 @@
 
-from app import TSETMCClient, API_KEY
-import json
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-client = TSETMCClient(API_KEY)
+from app.services.tsetmc import client
+import json
 
 print("Populating Symbols Registry...")
 # Fetch main markets to populate DB
