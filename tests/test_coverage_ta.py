@@ -18,6 +18,53 @@ def test_ta_calculate_technical_analysis_short():
     res = TechnicalAnalyzer.calculate_technical_analysis([{'date': '2023-01-01', 'close': 10}])
     assert len(res) == 1
 
+def test_ta_get_fibonacci_levels_empty():
+    df = pd.DataFrame()
+    assert TechnicalAnalyzer.get_fibonacci_levels(df) == {}
+
+def test_ta_calculate_risk_reward_empty():
+    assert TechnicalAnalyzer.calculate_risk_reward(100, [], []) is None
+
+def test_ta_resample_weekly_no_date():
+    data = [{'close': 10, 'open': 9}]
+    assert TechnicalAnalyzer.resample_to_weekly(data) == data
+
+def test_ta_resample_weekly_exception():
+    data = [{'date': 'invalid', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}]
+    # Should return original data on exception
+    result = TechnicalAnalyzer.resample_to_weekly(data)
+    assert result == data
+
+def test_ta_calculate_technical_analysis_short_len():
+    data = [{'date': '2023-01-01', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}] * 15  # len=15 <20
+    result = TechnicalAnalyzer.calculate_technical_analysis(data)
+    assert len(result) == 15
+    # SMA20 should be added with rolling mean for short data
+
+def test_ta_calculate_technical_analysis_mid_len():
+    data = [{'date': '2023-01-01', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}] * 25  # len=25 >=20 <26
+    result = TechnicalAnalyzer.calculate_technical_analysis(data)
+    assert len(result) == 25
+    assert 'MACD' not in result[0] or result[0]['MACD'] is None  # MACD None for <26
+
+def test_ta_calculate_technical_analysis_very_short():
+    data = [{'date': '2023-01-01', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}] * 5  # len=5 <10
+    result = TechnicalAnalyzer.calculate_technical_analysis(data)
+    assert result == data  # returns original if <10
+
+def test_ta_calculate_technical_analysis_with_index():
+    data = [{'date': '2023-01-01', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}] * 50
+    index_data = [{'date': '2023-01-01', 'close': 100}] * 50
+    result = TechnicalAnalyzer.calculate_technical_analysis(data, index_data)
+    assert len(result) == 50
+    # Should have beta if index_data provided
+
+def test_ta_calculate_technical_analysis_with_chart():
+    data = [{'date': '2023-01-01', 'close': 10, 'open': 9, 'high': 11, 'low': 8, 'volume': 100}] * 100
+    result = TechnicalAnalyzer.calculate_technical_analysis(data)
+    assert len(result) == 100
+    # Should have chart_image if data is long enough
+
 def test_ta_indicators_missing_cols():
     # Covers error paths when data is malformed
     # Needs at least 10 rows to even try

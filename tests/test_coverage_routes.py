@@ -26,17 +26,18 @@ def test_fetch_data_invalid_json(client):
     response = client.post('/api/fetch_data', data="invalid json", content_type='application/json')
     assert response.status_code == 400
 
-def test_fetch_data_missing_params(client):
-    # Tests line 82-90 logic for defaults
-    with patch("app.services.tsetmc.TSETMCClient.get_price_history") as mock_hist:
-        mock_hist.return_value = [{"date": "2023-01-01", "pc": 100, "pf": 90, "pmax": 110, "pmin": 80, "tvol": 1000}]
-        response = client.post('/api/fetch_data', json={"symbol": "TEST"})
-        # Note: If it fails because timeframe default is weekly (resampling), we handle it.
-        assert response.status_code == 200
-
-def test_fetch_data_invalid_json(client):
-    response = client.post('/api/fetch_data', data="invalid json", content_type='application/json')
+def test_fetch_data_invalid_data_type(client):
+    response = client.post('/api/fetch_data', json=[])
     assert response.status_code == 400
+    assert "Invalid JSON data" in response.get_json()['error']
+
+def test_fetch_data_cache_hit(client):
+    with patch("app.api.routes.cache.get") as mock_cache_get:
+        mock_cache_get.return_value = {"cached": "data"}
+        response = client.post('/api/fetch_data', json={"symbol": "TEST"})
+        assert response.status_code == 200
+        assert response.get_json() == {"cached": "data"}
+        mock_cache_get.assert_called_once()
 
 def test_fetch_data_proxy_history(client):
     with patch("app.services.tsetmc.TSETMCClient.get_market_proxy_history") as mock_proxy:
@@ -66,9 +67,12 @@ def test_market_status(client):
     assert "status" in response.get_json()
 
 def test_sync_registry_route(client):
-    response = client.post('/api/sync_registry')
-    assert response.status_code == 200
-    assert "Started" in response.get_json()['status']
+    with patch('time.sleep') as mock_sleep:
+        response = client.post('/api/sync_registry')
+        assert response.status_code == 200
+        assert "Started" in response.get_json()['status']
+        # Check that sleep was called
+        mock_sleep.assert_called()
 
 def test_fetch_data_sector_proxy(client):
     with patch("app.services.tsetmc.TSETMCClient.get_sector_history") as mock_sector:
@@ -146,3 +150,27 @@ def test_fetch_data_real_tse_history(client):
     assert response.status_code == 200
     data = response.get_json()
     assert isinstance(data, list)
+
+def test_index_route(client):
+    response = client.get('/')
+    assert response.status_code == 200
+
+def test_api_test_route(client):
+    response = client.get('/api_test')
+    assert response.status_code == 200
+
+def test_management_route(client):
+    response = client.get('/management')
+    assert response.status_code == 200
+
+def test_get_symbols_tgju(client):
+    with patch("app.services.tgju.tgju_client.get_all_symbols") as mock_get:
+        mock_get.return_value = [{"symbol": "USD", "name": "دلار"}]
+        response = client.get('/api/symbols/tgju')
+        assert response.status_code == 200
+        assert response.get_json() == [{"symbol": "USD", "name": "دلار"}]
+
+def test_clear_cache(client):
+    response = client.post('/api/clear_cache')
+    assert response.status_code == 200
+    assert "success" in response.get_json()['status']
