@@ -4,8 +4,6 @@ API endpoints for monitoring database update progress
 
 from flask import jsonify, Blueprint
 from app.services.incremental_updater import get_updater
-from pathlib import Path
-import json
 
 update_bp = Blueprint('updates', __name__, url_prefix='/api/updates')
 

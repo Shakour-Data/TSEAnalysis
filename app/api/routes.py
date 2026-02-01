@@ -1,9 +1,8 @@
-from flask import Blueprint, render_template, request, jsonify, current_app, send_file
+from flask import Blueprint, render_template, request, jsonify, send_file
 from datetime import datetime
 import time
 import random
 import threading
-import os
 import io
 import pandas as pd
 import base64
@@ -24,7 +23,6 @@ logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
 
 # Import updates routes
-from app.api.updates_routes import update_bp
 
 @main_bp.route('/')
 def index():

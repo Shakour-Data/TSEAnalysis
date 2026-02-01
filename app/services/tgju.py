@@ -1,6 +1,5 @@
 import requests
 import pandas as pd
-from datetime import datetime
 import time
 import logging
 from app.core_utils import SAFE_BROWSER_UA, update_stats

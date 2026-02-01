@@ -5,11 +5,9 @@ import mplfinance as mpf
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import jdatetime
 import io
 import base64
-import random
 import logging
 
 logger = logging.getLogger(__name__)

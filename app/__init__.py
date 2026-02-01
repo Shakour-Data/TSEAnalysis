@@ -17,7 +17,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from app.core_utils import stats
 from app.database import db
 
 cache = Cache()

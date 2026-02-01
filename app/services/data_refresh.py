@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import threading
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.services.tsetmc import client
 from app.database import db
 from app.services.local_ai_assistant import ai_assistant

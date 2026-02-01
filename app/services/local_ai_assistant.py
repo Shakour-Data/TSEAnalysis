@@ -1,5 +1,4 @@
 import os
-import json
 import random
 import pickle
 import threading
@@ -12,7 +11,6 @@ from sklearn.metrics import accuracy_score
 import pandas as pd
 import numpy as np
 from app.database import db
-from app.services.technical_analysis import TechnicalAnalyzer
 
 logger = logging.getLogger(__name__)
 

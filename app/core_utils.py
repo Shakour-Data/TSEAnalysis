@@ -2,7 +2,6 @@ import os
 import requests
 import requests.utils
 import urllib3
-import threading
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

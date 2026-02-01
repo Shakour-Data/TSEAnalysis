@@ -14,7 +14,7 @@ import json
 import time
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from app.services.tsetmc import client
 from app.database import db
