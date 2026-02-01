@@ -67,7 +67,8 @@ foreach ($file in $files) {
         git commit -m $msg -- $file 2>&1 | ForEach-Object { Write-Host "  $_" }
         $sha = git rev-parse --short HEAD
         $date = (Get-Date).ToString("o")
-        "`"$sha`",`"$file`",`"$date`",`"$msg`"" | Add-Content -Path $logFile -Encoding utf8
+        $csvLine = "`"$sha`",`"$file`",`"$date`",`"$msg`""
+        $csvLine | Add-Content -Path $logFile -Encoding utf8
         $committed++
         Write-Host "✓ Committed $sha" -ForegroundColor Green
     } catch {

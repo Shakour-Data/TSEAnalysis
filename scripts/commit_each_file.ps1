@@ -79,7 +79,7 @@ foreach ($file in $staged) {
 
         # append to CSV log (quote message)
         $csvLine = "`"$sha`",`"$file`",`"$dateIso`",`"$msg`""
-        Add-Content -Path $logFile -Value $csvLine -Encoding utf8
+        $csvLine | Add-Content -Path $logFile -Encoding utf8
 
         Write-Host "Committed $file -> $sha" -ForegroundColor Green
 
