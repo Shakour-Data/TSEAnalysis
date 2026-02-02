@@ -70,97 +70,125 @@ class LocalAIAssistant:
             self.model = None
             return
 
-        # Prepare features and labels
-        features = training_data[['price', 'volume', 'rsi', 'macd', 'ma20', 'ma50']]
-        labels = training_data['trend']  # 0: نزولی, 1: خنثی, 2: صعودی
+        try:
+            # Prepare features and labels
+            # NaN values کو ہٹائیں
+            training_data = training_data.dropna()
+            
+            if training_data.empty:
+                logger.warning("No valid training data after NaN removal")
+                self.model = None
+                return
+            
+            features = training_data[['price', 'volume', 'rsi', 'macd', 'ma20', 'ma50']]
+            labels = training_data['trend']  # 0: نزولی, 1: خنثی, 2: صعودی
+            
+            # Type conversion validation
+            try:
+                features = features.astype(float)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Feature type conversion failed: {e}")
+                self.model = None
+                return
 
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+            # Split data
+            if len(features) < 10:
+                logger.warning("Not enough training data (minimum 10 samples required)")
+                self.model = None
+                return
+            
+            X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
 
-        # Train model
-        self.model = RandomForestClassifier(n_estimators=100, random_state=42)
-        self.model.fit(X_train, y_train)
+            # Train model
+            self.model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+            self.model.fit(X_train, y_train)
 
-        # Evaluate
-        predictions = self.model.predict(X_test)
-        accuracy = accuracy_score(y_test, predictions)
-        logger.info(f"Model trained with accuracy: {accuracy:.2f}")
+            # Evaluate
+            predictions = self.model.predict(X_test)
+            accuracy = accuracy_score(y_test, predictions)
+            logger.info(f"✅ Model trained with accuracy: {accuracy:.2%}")
 
-        # Save model
-        with open(self.model_path, 'wb') as f:
-            pickle.dump(self.model, f)
+            # Save model
+            try:
+                os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+                with open(self.model_path, 'wb') as f:
+                    pickle.dump(self.model, f)
+                logger.info(f"Model saved to {self.model_path}")
+            except Exception as e:
+                logger.error(f"Failed to save model: {e}")
+        
+        except Exception as e:
+            logger.error(f"Model training failed: {e}")
+            self.model = None
 
     def _collect_training_data(self):
         """Collect and prepare training data from local database."""
-        # Get all symbols
-        symbols = db.get_all_symbols()
-        data_list = []
+        try:
+            # Get all symbols
+            symbols = db.get_all_symbols()
+            data_list = []
 
-        # Use ALL symbols with real data (not just 100)
-        for symbol_data in symbols:
-            symbol = symbol_data.get('l18', '')
-            history = db.get_history(symbol)
-            # Need at least 20 data points for proper indicators
-            if len(history) < 20:
-                continue
+            # Use ALL symbols with real data (not just 100)
+            for symbol_data in symbols:
+                symbol = symbol_data.get('l18', '')
+                history = db.get_history(symbol)
+                # Need at least 20 data points for proper indicators
+                if len(history) < 20:
+                    continue
 
-            # Calculate indicators for each data point
-            for i in range(14, len(history)):  # Skip first 14 for RSI calculation
-                current = history[i]
-                price = current.get('close', 0)
-                volume = current.get('vol', 0)
+                # Calculate indicators for each data point
+                for i in range(14, len(history)):  # Skip first 14 for RSI calculation
+                    current = history[i]
+                    price = current.get('close', 0)
+                    volume = current.get('vol', 0)
 
-                # Simple indicators
-                prices = [h.get('close', 0) for h in history[:i+1]]
-                rsi = self._calculate_rsi(prices)
-                macd = self._calculate_macd(prices)
-                ma20 = np.mean(prices[-20:]) if len(prices) >= 20 else price
-                ma50 = np.mean(prices[-50:]) if len(prices) >= 50 else price
+                    # Simple indicators
+                    prices = [h.get('close', 0) for h in history[:i+1]]
+                    rsi = self._calculate_rsi(prices)
+                    macd = self._calculate_macd(prices)
+                    ma20 = np.mean(prices[-20:]) if len(prices) >= 20 else price
+                    ma50 = np.mean(prices[-50:]) if len(prices) >= 50 else price
 
-                # Determine trend label (next day direction)
-                if i < len(history) - 1:
-                    next_price = history[i+1].get('close', 0)
-                    if next_price > price * 1.01:  # 1% up
-                        trend = 2  # صعودی
-                    elif next_price < price * 0.99:  # 1% down
-                        trend = 0  # نزولی
+                    # Determine trend label (next day direction)
+                    if i < len(history) - 1:
+                        next_price = history[i+1].get('close', 0)
+                        if next_price > price * 1.01:  # 1% up
+                            trend = 2  # صعودی
+                        elif next_price < price * 0.99:  # 1% down
+                            trend = 0  # نزولی
+                        else:
+                            trend = 1  # خنثی
                     else:
-                        trend = 1  # خنثی
-                else:
-                    trend = 1
+                        trend = 1
 
-                data_list.append({
-                    'price': price,
-                    'volume': volume,
-                    'rsi': rsi,
-                    'macd': macd,
-                    'ma20': ma20,
-                    'ma50': ma50,
-                    'trend': trend
-                })
+                    data_list.append({
+                        'price': price,
+                        'volume': volume,
+                        'rsi': rsi,
+                        'macd': macd,
+                        'ma20': ma20,
+                        'ma50': ma50,
+                        'trend': trend
+                    })
 
-        logger.info(f"Collected {len(data_list)} training samples from real market data")
-        return pd.DataFrame(data_list)
+            logger.info(f"Collected {len(data_list)} training samples from real market data")
+            return pd.DataFrame(data_list)
+            
+        except Exception as e:
+            logger.error(f"Training data collection failed: {e}")
+            return pd.DataFrame()
 
     def _calculate_rsi(self, prices, period=14):
         """Simple RSI calculation."""
         if len(prices) < period + 1:
             return 50
-        gains = []
-        losses = []
-        for i in range(1, len(prices)):
-            change = prices[i] - prices[i-1]
-            if change > 0:
-                gains.append(change)
-                losses.append(0)
-            else:
-                gains.append(0)
-                losses.append(abs(change))
-        avg_gain = np.mean(gains[-period:])
-        avg_loss = np.mean(losses[-period:])
-        if avg_loss == 0:
-            return 100
-        rs = avg_gain / avg_loss
+        
+        deltas = np.diff(prices)
+        seed = deltas[:period+1]
+        up = seed[seed >= 0].sum() / period
+        down = -seed[seed < 0].sum() / period
+        
+        rs = up / down if down != 0 else 0
         return 100 - (100 / (1 + rs))
 
     def _calculate_macd(self, prices):

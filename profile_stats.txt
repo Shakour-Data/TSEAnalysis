@@ -1,0 +1,28 @@
+         1341824 function calls (1321968 primitive calls) in 77.464 seconds
+
+   Ordered by: cumulative time
+   List reduced from 3682 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000   77.536   77.536 C:\Program Files\Python311\Lib\site-packages\memory_profiler.py:1185(wrapper)
+        1    0.000    0.000   73.216   73.216 C:\Program Files\Python311\Lib\site-packages\memory_profiler.py:759(f)
+        1    0.004    0.004   73.216   73.216 C:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\performance_profiling.py:142(memory_profile_main)
+        1    0.004    0.004   69.746   69.746 C:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\performance_profiling.py:22(profile_api_endpoints)
+        1    0.002    0.002   64.556   64.556 C:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\..\app\__init__.py:34(create_app)
+    790/6    0.153    0.000   63.609   10.601 <frozen importlib._bootstrap>:1165(_find_and_load)
+    761/6    0.121    0.000   63.604   10.601 <frozen importlib._bootstrap>:1120(_find_and_load_unlocked)
+    742/6    0.118    0.000   63.572   10.595 <frozen importlib._bootstrap>:666(_load_unlocked)
+    602/6    0.056    0.000   63.539   10.590 <frozen importlib._bootstrap_external>:934(exec_module)
+  1825/12    0.087    0.000   63.491    5.291 <frozen importlib._bootstrap>:233(_call_with_frames_removed)
+   941/52    0.153    0.000   63.480    1.221 {built-in method builtins.exec}
+        1    0.003    0.003   63.254   63.254 C:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\..\app\api\routes.py:1(<module>)
+        1    0.000    0.000   63.153   63.153 C:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\..\app\services\local_ai_assistant.py:1(<module>)
+    204/9    0.008    0.000   59.325    6.592 {built-in method builtins.__import__}
+        1    0.000    0.000   52.462   52.462 C:\Program Files\Python311\Lib\site-packages\sklearn\__init__.py:1(<module>)
+        1    0.003    0.003   52.208   52.208 C:\Program Files\Python311\Lib\site-packages\sklearn\base.py:1(<module>)
+        1    0.003    0.003   51.976   51.976 C:\Program Files\Python311\Lib\site-packages\sklearn\utils\__init__.py:1(<module>)
+        1    0.001    0.001   46.508   46.508 C:\Program Files\Python311\Lib\site-packages\sklearn\utils\_estimator_html_repr.py:1(<module>)
+        1    0.001    0.001   46.422   46.422 C:\Program Files\Python311\Lib\site-packages\sklearn\utils\fixes.py:1(<module>)
+        1    0.003    0.003   37.258   37.258 C:\Program Files\Python311\Lib\site-packages\scipy\stats\__init__.py:1(<module>)
+
+

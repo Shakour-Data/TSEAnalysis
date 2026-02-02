@@ -101,7 +101,7 @@ def test_technical_analysis_edge_cases():
     assert "Pattern" in res[0]
 
 def test_core_utils_stats():
-    from app.core_utils import update_stats, stats
+    from app.utils.core_utils import update_stats, stats
     update_stats("test", "success")
     assert stats["services"]["test"]["success"] >= 1
 def test_tsetmc_complex_methods(tsetmc_client):

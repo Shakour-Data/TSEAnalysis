@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
 from datetime import datetime
+import jdatetime
 import time
 import random
 import threading
@@ -10,17 +11,58 @@ import zipfile
 import logging
 import json
 import hashlib
+from functools import wraps
 
 from app.services.tsetmc import client
 from app.services.tgju import tgju_client
 from app.services.technical_analysis import TechnicalAnalyzer
 from app.services.local_ai_assistant import ai_assistant
 from app.database import db
-from app.core_utils import PROXY_URL, stats
+from app.utils.core_utils import PROXY_URL, stats
 from app import cache
 
 logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
+
+# API Rate Limiting (سادہ لیکن مؤثر)
+_rate_limit_store = {}  # IP: [timestamps]
+
+def rate_limit(max_requests=100, window_seconds=60):
+    """
+    سادہ rate limiter decorator
+    - ہر IP کے لیے max_requests سے زیادہ نہیں
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            client_ip = request.remote_addr or 'unknown'
+            now = time.time()
+            
+            # IP کے timestamps کو صاف کریں
+            if client_ip not in _rate_limit_store:
+                _rate_limit_store[client_ip] = []
+            
+            # پرانے timestamps کو ہٹائیں
+            _rate_limit_store[client_ip] = [
+                t for t in _rate_limit_store[client_ip]
+                if (now - t) < window_seconds
+            ]
+            
+            # Limit check
+            if len(_rate_limit_store[client_ip]) >= max_requests:
+                logger.warning(f"⚠️ Rate limit exceeded for {client_ip}")
+                return jsonify({
+                    "error": "درخواستیں بہت زیادہ ہیں - براہ مہربانی کچھ دیر میں دوبارہ کوشش کریں",
+                    "retry_after": window_seconds
+                }), 429
+            
+            # Request record کریں
+            _rate_limit_store[client_ip].append(now)
+            
+            return f(*args, **kwargs)
+        
+        return decorated_function
+    return decorator
 
 # Import updates routes
 
@@ -54,16 +96,48 @@ def get_market_status():
         }
     })
 
+@main_bp.route('/api/market/overview')
+def get_market_overview():
+    """Returns comprehensive market overview."""
+    try:
+        # Get market indices
+        indices = []
+        for idx_type in ["1", "2"]:  # bourse and farabourse
+            try:
+                data = client.get_indices(idx_type)
+                if isinstance(data, list) and data:
+                    item = data[0]
+                    indices.append({
+                        "name": "شاخص کل" if idx_type == "1" else "شاخص کل فرابورس",
+                        "value": item.get('value') or item.get('index'),
+                        "change": item.get('change'),
+                        "change_percent": item.get('change_percent')
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to get index {idx_type}: {e}")
+
+        # Get market statistics
+        total_symbols = db.get_total_symbols_count()
+        
+        return jsonify({
+            "indices": indices,
+            "total_symbols": total_symbols,
+            "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "market_status": "open" if 9 <= datetime.now().hour <= 12 else "closed"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to get market overview: {str(e)}"}), 500
+
 @main_bp.route('/api/health')
 def health_check():
     """Diagnostic endpoint to check connectivity status."""
     test_res = client._make_request("Api/Tsetmc/Index.php", {"type": "1"})
-    status = "OK" if "error" not in test_res else "FAILED"
+    status = "OK" if test_res and isinstance(test_res, dict) and "error" not in test_res else "FAILED"
     return jsonify({
         "status": status,
         "proxy": PROXY_URL,
         "active_client": client.client_name,
-        "test_response": str(test_res)[:200]
+        "test_response": str(test_res)[:200] if test_res else "None"
     })
 
 @main_bp.route('/api/symbols/<market_type>')
@@ -76,6 +150,24 @@ def get_symbols(market_type):
     if isinstance(symbols, dict) and "error" in symbols:
         return jsonify(symbols)
     return jsonify(symbols if symbols else [])
+
+@main_bp.route('/api/symbols')
+def get_all_symbols():
+    """Get all symbols from all markets."""
+    refresh = request.args.get('refresh', 'false').lower() == 'true'
+    all_symbols = []
+    
+    # Get symbols from all markets
+    markets = ['1', '2', '4', '5']  # bourse, farabourse, base, etf
+    for market in markets:
+        try:
+            symbols = client.get_all_symbols(market, force_refresh=refresh)
+            if isinstance(symbols, list):
+                all_symbols.extend(symbols)
+        except Exception as e:
+            logger.warning(f"Failed to get symbols for market {market}: {e}")
+    
+    return jsonify(all_symbols)
 
 @main_bp.route('/api/sync_registry', methods=['POST'])
 def sync_registry():
@@ -99,14 +191,36 @@ def sync_registry():
     })
 
 @main_bp.route('/api/fetch_data', methods=['POST'])
+@rate_limit(max_requests=50, window_seconds=60)  # ہر منٹ میں 50 requests
 def fetch_data():
+    """
+    Input validation شامل کریں
+    """
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
     data = request.json
     if not data or not isinstance(data, dict):
         return jsonify({"error": "Invalid JSON data"}), 400
-    force_refresh = data.get('refresh', False)
+    
+    # Input validation
+    try:
+        asset_type = data.get('asset_type', 'tse').strip()
+        if not asset_type: asset_type = 'tse'
+        
+        symbol = data.get('symbol', '').strip()
+        candle_count = int(data.get('candle_count', 100))
+        force_refresh = bool(data.get('refresh', False))
+        
+        if candle_count < 1 or candle_count > 5000:
+            return jsonify({"error": "candle_count 1 سے 5000 کے درمیان ہونی چاہیے"}), 400
+        
+        if symbol and len(symbol) > 50:
+            return jsonify({"error": "symbol بہت لمبی ہے"}), 400
+        
+    except (ValueError, TypeError) as e:
+        logger.error(f"Input validation error: {e}")
+        return jsonify({"error": f"غلط input: {str(e)[:50]}"}), 400
     
     # Stable Cache key using MD5 hash of sorted JSON
     data_str = json.dumps(data, sort_keys=True)
@@ -115,7 +229,7 @@ def fetch_data():
     if not force_refresh:
         cached_res = cache.get(cache_key)
         if cached_res: 
-            logger.debug(f"Cache hit for {data.get('symbol')}")
+            logger.debug(f"Cache hit for {symbol}")
             return jsonify(cached_res)
 
     asset_type = data.get('asset_type')
@@ -150,6 +264,15 @@ def fetch_data():
             result = [res] if res else []
         elif service_type in ['history', 'technical']:
             result = client.get_price_history(symbol, adjusted=adjusted, force_refresh=force_refresh)
+        elif service_type == 'client_type':
+            result = client.get_client_type(symbol, force_refresh=force_refresh)
+        elif service_type == 'transactions':
+            result = client.get_transactions(symbol)
+        elif service_type == 'shareholders':
+            result = client.get_shareholders(symbol)
+        elif service_type == 'codal':
+            category = data.get('codal_category')
+            result = client.get_codal_announcements(symbol=symbol, category=category)
 
     # Handle error response (but don't error if it's mock data)
     if isinstance(result, dict) and "error" in result and not force_refresh:
@@ -163,34 +286,44 @@ def fetch_data():
     if service_type == 'technical' and isinstance(result, list) and len(result) > 0:
         result = TechnicalAnalyzer.prepare_ohlcv_data(result)
         
-        # Apply Date Range Filtering
+        # 1. Fetch Index Data for Beta calculation
+        index_data = None
+        if asset_type != 'indices_market':
+            try:
+                # Use "شاخص کل" which is the handled keyword in TSETMCClient
+                index_symbol = "شاخص کل"
+                index_data = client.get_price_history(index_symbol, adjusted=False)
+                if not isinstance(index_data, list): index_data = None
+            except Exception as e:
+                logger.debug(f"Index fetch failed for beta: {e}")
+                pass
+
+        # 2. Resample if weekly
+        if timeframe == 'weekly': 
+            result = TechnicalAnalyzer.resample_to_weekly(result)
+        
+        # 3. Calculate Technical Analysis (ON FULL HISTORY)
+        result = TechnicalAnalyzer.calculate_technical_analysis(result, index_data=index_data)
+        
+        # 4. NOW Apply Date Range Filtering for display
         if (start_date or end_date) and result:
             try:
-                # If weekly, expand the range 5x backwards as per user requirement
-                final_start = start_date
-                if timeframe == 'weekly' and start_date and end_date:
-                    s_dt = datetime.strptime(start_date, '%Y-%m-%d')
-                    e_dt = datetime.strptime(end_date, '%Y-%m-%d')
-                    diff = e_dt - s_dt
-                    expanded_start = e_dt - (diff * 5)
-                    final_start = expanded_start.strftime('%Y-%m-%d')
-                
                 filtered = []
                 for item in result:
                     item_date = item.get('date', '')[:10]
-                    if final_start and item_date < final_start: continue
+                    if start_date and item_date < start_date: continue
                     if end_date and item_date > end_date: continue
                     filtered.append(item)
+                
+                # If everything was filtered out, keep at least one record to avoid error UI
+                if not filtered and result:
+                    filtered = [result[0]]
                 result = filtered
             except Exception as e:
                 logger.error(f"Date Filter Error: {e}")
-
-        if timeframe == 'weekly': 
-            result = TechnicalAnalyzer.resample_to_weekly(result)
-            
-        result = TechnicalAnalyzer.calculate_technical_analysis(result)
         
-        if len(result) > 5: # Reduced minimum for better visibility
+        # 5. Generate Chart
+        if len(result) > 0:
             try:
                 buf = TechnicalAnalyzer.generate_chart_image(result, symbol, timeframe=timeframe)
                 if buf: result[0]['chart_image'] = base64.b64encode(buf.getvalue()).decode('utf-8')
@@ -204,6 +337,68 @@ def fetch_data():
     cache.set(cache_key, result if result else [], timeout=600)
     return jsonify(result if result else [])
 
+@main_bp.route('/api/technical-analysis/<symbol>')
+def get_technical_analysis(symbol):
+    """Get technical analysis for a specific symbol."""
+    try:
+        # Get price history
+        history = client.get_price_history(symbol, adjusted=True)
+        if not isinstance(history, list) or not history:
+            return jsonify({"error": "No historical data available"}), 404
+
+        # Prepare data for technical analysis
+        prepared_data = TechnicalAnalyzer.prepare_ohlcv_data(history)
+        if not prepared_data:
+            return jsonify({"error": "Failed to prepare data for analysis"}), 500
+
+        # Get technical indicators
+        analysis = {
+            "symbol": symbol,
+            "data_points": len(prepared_data),
+            "indicators": {},
+            "signals": {}
+        }
+
+        # Calculate basic indicators
+        if len(prepared_data) > 14:
+            # RSI
+            try:
+                rsi = TechnicalAnalyzer.calculate_rsi(prepared_data['close'])
+                analysis["indicators"]["rsi"] = rsi.iloc[-1] if not rsi.empty else None
+            except:
+                analysis["indicators"]["rsi"] = None
+
+            # MACD
+            try:
+                macd, signal, hist = TechnicalAnalyzer.calculate_macd(prepared_data['close'])
+                analysis["indicators"]["macd"] = {
+                    "macd": macd.iloc[-1] if not macd.empty else None,
+                    "signal": signal.iloc[-1] if not signal.empty else None,
+                    "histogram": hist.iloc[-1] if not hist.empty else None
+                }
+            except:
+                analysis["indicators"]["macd"] = None
+
+            # Bollinger Bands
+            try:
+                upper, middle, lower = TechnicalAnalyzer.calculate_bollinger_bands(prepared_data['close'])
+                analysis["indicators"]["bollinger"] = {
+                    "upper": upper.iloc[-1] if not upper.empty else None,
+                    "middle": middle.iloc[-1] if not middle.empty else None,
+                    "lower": lower.iloc[-1] if not lower.empty else None
+                }
+            except:
+                analysis["indicators"]["bollinger"] = None
+
+        # Generate signals
+        analysis["signals"] = TechnicalAnalyzer.generate_signals(prepared_data)
+
+        return jsonify(analysis)
+
+    except Exception as e:
+        logger.error(f"Technical analysis error for {symbol}: {e}")
+        return jsonify({"error": f"Failed to analyze {symbol}: {str(e)}"}), 500
+
 @main_bp.route('/api/ai_package', methods=['POST'])
 def generate_ai_package():
     data = request.json
@@ -211,33 +406,165 @@ def generate_ai_package():
     tech_data = data.get('data', [])
     weekly_data = data.get('weekly_data', [])
     if not tech_data: return jsonify({"error": "داده‌ای یافت نشد."})
-    latest = tech_data[0]
     
-    # Generate Strategy Matrix
+    # 0. Preparation
+    latest = tech_data[0]
+    curr_price = latest.get('close', 0)
     supports = latest.get('supports', [])
     resistances = latest.get('resistances', [])
-    current_price = latest.get('close', 0)
+    rsi = latest.get('RSI', 50)
+    signal = latest.get('Signal', 'Neutral')
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    jalali_today = jdatetime.date.fromgregorian(date=datetime.now().date()).strftime('%Y/%m/%d')
     
-    strategies = []
-    strategy_table = ""
-    try:
-        strategies = TechnicalAnalyzer.generate_strategy_matrix(current_price, supports, resistances)
-        strategy_table = "\n### 📊 ماتریس استراتژی معاملاتی (۴ بعدی)\n"
-        strategy_table += "| ابعاد (شخصیت-ریسک-بازده-افق) | شیوه معاملاتی | نقطه ورود و تریگر | حد سود | حد ضرر | توضیحات فنی |\n"
-        strategy_table += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
-        for s in strategies:
-            strategy_table += f"| {s['dimension']} | {s['style']} | {s['entry']} | {s['target']} | {s['stop_loss']} | {s['trigger']} |\n"
-    except Exception as e:
-        print(f"Strategy Matrix Error: {e}")
+    # 1. Strategy Calculation
+    strategies = TechnicalAnalyzer.generate_strategy_matrix(curr_price, supports, resistances)
+    
+    # 2. Level Extraction (Ensure 5 levels)
+    def _get_lvl(l, i):
+        if i >= len(l): return "---"
+        item = l[i]
+        val = item.get('value', 0) if isinstance(item, dict) else item
+        return str(int(val)) if val else "---"
 
-    report = f"# گزارش تحلیل تکنیکال هوشمند: {symbol}\n"
-    report += f"**تاریخ گزارش:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-    report += f"### 🔍 وضعیت فعلی\n- **قیمت آخرین معامله:** {int(current_price):,}\n"
-    report += f"- **سیگنال اندیکاتورها:** {latest.get('Signal', 'Neutral')}\n"
-    report += f"- **الگوی شمعی:** {latest.get('Pattern', 'None')}\n\n"
+    s_list = [_get_lvl(supports, i) for i in range(5)]
+    r_list = [_get_lvl(resistances, i) for i in range(5)]
     
-    report += strategy_table
-    
+    # 3. Wave & Scenario Guessing (Logic-based)
+    scenario_weights = {"continuation": 40, "correction": 30, "reversal": 30}
+    if "Bullish" in signal: 
+        scenario_weights = {"continuation": 60, "correction": 25, "reversal": 15}
+        wave_str = "موج ۳ از ۵ صعودی"
+    elif "Bearish" in signal:
+        scenario_weights = {"continuation": 55, "correction": 30, "reversal": 15}
+        wave_str = "موج C از اصلاح بزرگ"
+    else:
+        wave_str = "موج ۴ رنج"
+
+    # --- START 7-SLIDE MARKDOWN GENERATION ---
+    report = f"""# **📊 پروتکل تحلیل تکنیکال پیشرفته ۷ اسلایدی (نسخه ۴.۰)**
+
+---
+
+## **🖥️ اسلاید ۱: شناسنامه تحلیلی و وضعیت کلی**
+
+### **اطلاعات تحلیلگر:**
+```
+👤 تحلیلگر: شکور علیشاهی
+📞 تماس: 09124467903
+📅 تاریخ تحلیل: {jalali_today}
+📊 نماد: {symbol}
+⏰ بازه تحلیلی: کوتاه‌مدت (۱ هفته) | میان‌مدت (۱ ماه) | بلندمدت (۳ ماه)
+```
+
+### **وضعیت کلی بازار:**
+```
+🎯 قیمت فعلی: {int(curr_price):,} تومان
+📈 سیگنال: {signal}
+💰 حجم معاملات: {int(latest.get('volume', 0)):,}
+📊 الگوی شمعی: {latest.get('Pattern', 'نامشخص')}
+🔼 سقف/کف روز: {int(latest.get('high', 0)):,} / {int(latest.get('low', 0)):,}
+```
+
+### **توصیه اولیه:**
+«بر اساس تحلیل اولیه، وضعیت **{signal}** در نمودار {symbol} مشاهده می‌شود.»
+
+---
+
+## **📈 اسلاید ۲: تحلیل سه‌بعدی تایم‌فریم‌ها**
+
+### **الف) نمودار روزانه کوتاه‌مدت (۱۵ روز):**
+* روند فعلی: {"صعودی" if rsi > 50 else "نزولی"}
+* میانگین متحرک ۲۰ روزه: {int(latest.get('SMA20', 0)):,}
+* قدرت روند (ADX): {latest.get('ADX', '---')}
+
+### **ب) نمودار روزانه بلندمدت (۳ سال):**
+* موج فعلی: {wave_str}
+* اهداف میان‌مدت: {int(curr_price * 1.1):,}, {int(curr_price * 1.25):,}
+
+### **ج) نمودار هفتگی:**
+* وضعیت روند اصلی: {"قدرتمند" if abs(rsi-50) > 10 else "رنج"}
+* پیش‌بینی بازه آتی: {int(curr_price * 0.95):,} تا {int(curr_price * 1.05):,}
+
+---
+
+## **🎭 اسلاید ۳: تحلیل امواج و الگوهای هارمونیک**
+
+### **موج‌شمار الیوت جامع:**
+- **موج اصلی:** {wave_str}
+- **نسبت فیبوناچی کلیدی:** {latest.get('fibonacci', {}).get('61.8%', '---')}
+- **تعداد زیرموج‌ها:** تکمیل شده
+
+### **الگوهای هارمونیک و PRZ:**
+- **الگوی شناسایی شده:** {latest.get('Pattern') or "شناسایی نشده"}
+- **منطقه PRZ خرید:** {s_list[0]} تا {s_list[1]}
+- **منطقه PRZ فروش:** {r_list[0]} تا {r_list[1]}
+
+---
+
+## **📍 اسلاید ۴: سطوح قیمتی حیاتی و واکنش به شکست**
+
+### **🔺 ۵ سطح مقاومت بالایی:**
+1. **{r_list[0]}** (مقاومت روانی اول)
+2. **{r_list[1]}** (هدف نوسانی)
+3. **{r_list[2]}** (سد اصلی روند)
+4. **{r_list[3]}** (هدف میان‌مدت)
+5. **{r_list[4]}** (سقف تاریخی/تحلیلی)
+
+### **🔻 ۵ سطح حمایت پایینی:**
+1. **{s_list[0]}** (حمایت معتبر اول)
+2. **{s_list[1]}** (نقطه بازگشت احتمالی)
+3. **{s_list[2]}** (کف کانال فعلی)
+4. **{s_list[3]}** (حمایت روانی سنگین)
+5. **{s_list[4]}** (کف امن سرمایه‌گذاری)
+
+---
+
+## **📊 اسلاید ۵: ماتریس عملیاتی ۶ پروفایل**"""
+
+    # Add Matrix Table
+    report += "\n| پروفایل | تیپ شخصیتی | افق زمانی | ورود | حد سود | حد ضرر | R/R |\n"
+    report += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    for s in strategies:
+        entry = s['نقطه ورود']
+        if isinstance(entry, (int, float)): entry = f"{int(entry):,}"
+        report += f"| {s['پروفایل سرمایه‌گذار']} | {s['تیپ شخصیتی']} | {s['افق زمانی']} | {entry} | {int(s['حد سود (TP)']):,} | {int(s['حد ضرر (SL)']):,} | {s['R/R']} |\n"
+
+    report += f"""
+---
+
+## **🎲 اسلاید ۶: سناریوهای محتمل با وزن‌دهی عددی**
+
+### **سناریوی ۱: ادامه روند (وزن: {scenario_weights['continuation']}%)**
+- تریگر فعال‌ساز: تثبیت بالای {r_list[0]}
+- هدف اول: {r_list[1]}
+
+### **سناریوی ۲: اصلاح سالم (وزن: {scenario_weights['correction']}%)**
+- محدوده اصلاح: {s_list[0]}
+- دلیل: اشباع خرید موقت در اندیکاتورها
+
+### **سناریوی ۳: بازگشت روند (وزن: {scenario_weights['reversal']}%)**
+- هشدار شکست: زیر {s_list[1]}
+- هدف نزولی: {s_list[2]}
+
+---
+
+## **✅ اسلاید ۷: جمع‌بندی و توصیه نهایی**
+
+### **خلاصه تراز:**
+- امتیاز کلی: **{round(rsi/10, 1)} / ۱۰**
+- برآیند سیگنال‌ها: **{signal}**
+
+### **توصیه اختصاصی:**
+- **محافظه‌کار:** صبر در نقاط حمایتی {s_list[1]}
+- **تهاجمی:** ورود پله‌ای در محدوده {curr_price}
+
+### **نقطه ابطال تحلیل:**
+⛔ شکست قیمت **{s_list[2]}** به سمت پایین یا حجم مشکوک در مقاومت **{r_list[0]}**.
+
+**تحلیلگر: شکور علیشاهی | 09124467903**
+"""
+
     return jsonify({
         "json": {
             "daily": tech_data, 
@@ -245,7 +572,7 @@ def generate_ai_package():
             "strategies": strategies
         }, 
         "markdown": report, 
-        "filename": f"AI_Package_{symbol}"
+        "filename": f"ATAP_Pro_7Slide_{symbol}"
     })
 
 @main_bp.route('/api/download_comprehensive', methods=['POST'])

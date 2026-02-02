@@ -16,16 +16,17 @@ class SmartRateLimiter:
     نرخ‌محدود کننده هوشمند برای API
     """
     
-    def __init__(self, base_delay=2.0, max_attempts=3, backoff_factor=2.0):
+    def __init__(self, base_delay=2.0, max_delay=60.0, max_attempts=3, backoff_factor=2.0):
         """
         Args:
             base_delay: تاخیر پایه بین درخواست‌ها (ثانیه)
+            max_delay: حداکثر تاخیر (ثانیه)
             max_attempts: حداکثر تلاش مجدد
             backoff_factor: ضریب افزایش تاخیر
         """
         self.base_delay = base_delay
+        self.max_delay = max_delay
         self.current_delay = base_delay
-        self.max_delay = 60  # حداکثر 60 ثانیه
         self.max_attempts = max_attempts
         self.backoff_factor = backoff_factor
         
@@ -35,26 +36,21 @@ class SmartRateLimiter:
         self.reset_time = None
     
     def wait_before_request(self):
-        """انتظار قبل از درخواست بعدی."""
-        now = time.time()
-        elapsed = now - self.last_request_time
-        wait_time = max(0, self.current_delay - elapsed)
-        
+        """
+        Waits for the calculated delay time before allowing a new request.
+        """
+        time_since_last = time.time() - self.last_request_time
+        wait_time = self.current_delay - time_since_last
         if wait_time > 0:
-            logger.debug(f"Rate limit: waiting {wait_time:.1f}s")
             time.sleep(wait_time)
-        
         self.last_request_time = time.time()
-    
+
     def on_success(self):
-        """فراخوانی شده هنگام موفقیت درخواست."""
-        self.consecutive_failures = 0
-        # بازگشت آهسته به تاخیر پایه
-        self.current_delay = max(
-            self.base_delay,
-            self.current_delay * 0.95
-        )
-        logger.debug(f"Success - delay now: {self.current_delay:.1f}s")
+        """
+        Resets the delay to the base delay after a successful request.
+        """
+        self.current_delay = self.base_delay
+        logger.info(f"Request successful, delay reset to {self.current_delay:.2f}s")
     
     def on_failure(self, error_code=None):
         """فراخوانی شده هنگام شکست درخواست."""

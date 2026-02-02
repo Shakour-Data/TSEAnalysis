@@ -1,0 +1,65 @@
+{
+  "profiling_results": {
+    "api_profiling": {
+      "/api/symbols": {
+        "response_time": 0.14986395835876465,
+        "status_code": 404,
+        "current_memory": 0.14270782470703125,
+        "peak_memory": 0.14393901824951172,
+        "response_size": 81
+      },
+      "/api/symbols/1": {
+        "response_time": 4.633289337158203,
+        "status_code": 200,
+        "current_memory": 12.042088508605957,
+        "peak_memory": 15.298879623413086,
+        "response_size": 738007
+      },
+      "/api/market/overview": {
+        "response_time": 0.12253546714782715,
+        "status_code": 404,
+        "current_memory": 0.018707275390625,
+        "peak_memory": 0.02083873748779297,
+        "response_size": 81
+      },
+      "/api/technical-analysis/1": {
+        "response_time": 0.13908958435058594,
+        "status_code": 404,
+        "current_memory": 0.01947021484375,
+        "peak_memory": 0.02161884307861328,
+        "response_size": 81
+      }
+    },
+    "data_fetching": {
+      "operation": "get_symbol_list",
+      "response_time": 3.271345376968384,
+      "symbols_count": 748,
+      "current_memory": 1.0520296096801758,
+      "peak_memory": 1.1107492446899414
+    },
+    "chart_generation": {
+      "correlation_matrix": {
+        "error": "'SymbolInfographics' object has no attribute 'generate_correlation_matrix'"
+      },
+      "volatility_analysis": {
+        "error": "'SymbolInfographics' object has no attribute 'generate_volatility_analysis'"
+      },
+      "seasonal_analysis": {
+        "error": "'SymbolInfographics' object has no attribute 'generate_seasonal_analysis'"
+      }
+    }
+  },
+  "benchmark_results": {
+    "api_response_times": [
+      0.03337710000005245,
+      0.003758999999945445,
+      0.02372319999994943,
+      0.008290199999919423,
+      0.07017419999988306
+    ],
+    "average_time": 0.027864739999949963,
+    "min_time": 0.003758999999945445,
+    "max_time": 0.07017419999988306
+  },
+  "timestamp": 1770067556.0496917
+}

@@ -1,7 +1,7 @@
 import pytest
 from app.services.tsetmc import TSETMCClient
 from app.services.technical_analysis import TechnicalAnalyzer
-from app.core_utils import API_KEY
+from app.utils.core_utils import API_KEY
 from unittest.mock import patch, MagicMock
 import pandas as pd
 import numpy as np
@@ -140,7 +140,7 @@ def test_tsetmc_classify_equity_market_edge_cases(tsetmc_client):
     assert isinstance(res, str)
 
 def test_core_utils_stats_endpoint():
-    from app.core_utils import update_stats, stats
+    from app.utils.core_utils import update_stats, stats
     update_stats("test_svc", "success", endpoint="api/test")
     found = False
     for h in stats["history"]:
@@ -167,7 +167,7 @@ def test_routes_ai_package(client):
     assert "markdown" in resp.get_json()
 
 def test_core_utils_stats_errors():
-    from app.core_utils import update_stats, stats
+    from app.utils.core_utils import update_stats, stats
     update_stats('tsetmc', 'blocked')
     update_stats('tgju', 'success')
     assert stats['services']['tsetmc']['blocked'] > 0

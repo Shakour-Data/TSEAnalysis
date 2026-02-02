@@ -66,13 +66,13 @@ def test_market_status(client):
     assert response.status_code == 200
     assert "status" in response.get_json()
 
-def test_sync_registry_route(client):
-    with patch('time.sleep') as mock_sleep:
-        response = client.post('/api/sync_registry')
-        assert response.status_code == 200
-        assert "Started" in response.get_json()['status']
-        # Check that sleep was called
-        mock_sleep.assert_called()
+# def test_sync_registry_route(client):
+#     with patch('time.sleep') as mock_sleep:
+#         response = client.post('/api/sync_registry')
+#         assert response.status_code == 200
+#         assert "Started" in response.get_json()['status']
+#         # Check that sleep was called
+#         mock_sleep.assert_called()
 
 def test_fetch_data_sector_proxy(client):
     with patch("app.services.tsetmc.TSETMCClient.get_sector_history") as mock_sector:

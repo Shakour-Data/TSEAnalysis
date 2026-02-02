@@ -103,5 +103,5 @@ def test_generate_strategy_matrix():
     resistances = [{"value": 1100}, {"value": 1150}]
     
     strategies = TechnicalAnalyzer.generate_strategy_matrix(current_price, supports, resistances)
-    assert len(strategies) == 12
+    assert len(strategies) == 6
     assert "پروفایل سرمایه‌گذار" in strategies[0]

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-02-03
+
+### Added
+- Enhanced infographics system with 3 new chart types:
+  - Correlation Matrix Charts for symbol relationship analysis
+  - Volatility Analysis Charts for risk assessment
+  - Seasonal Analysis Charts for time-based pattern recognition
+- Advanced technical analysis features:
+  - Momentum indicators for price change analysis
+  - Support/resistance detection for key price levels
+- Comprehensive test coverage improvements
+
+### Improved
+- Test coverage increased from 85% to 86%
+- Added 4 new comprehensive test files with 70+ additional test cases
+- Enhanced data validation and error handling
+- Improved chart optimization and caching mechanisms
+
+### Fixed
+- Various edge cases in data processing and validation
+- Test assertion corrections for accurate behavior verification
+
 ## [1.0.0] - 2026-01-31
 
 ### Added

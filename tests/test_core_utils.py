@@ -1,5 +1,5 @@
 import pytest
-from app.core_utils import update_stats, stats
+from app.utils.core_utils import update_stats, stats
 
 def test_update_stats():
     # Reset stats
@@ -33,7 +33,7 @@ def test_stats_history_limit():
     assert stats["history"][0]["endpoint"] == "ep_99"
 
 def test_core_utils_imports():
-    from app.core_utils import TLS_CLIENT_AVAILABLE, CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE
+    from app.utils.core_utils import TLS_CLIENT_AVAILABLE, CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE
     # These are boolean flags, just check they are defined
     assert isinstance(TLS_CLIENT_AVAILABLE, bool)
     assert isinstance(CURL_CFFI_AVAILABLE, bool)
@@ -43,6 +43,6 @@ def test_core_utils_import_failures():
     # Test that flags are set correctly even if imports fail
     # Since imports are at module level, we can't easily test failure
     # But we can check the flags are boolean
-    from app.core_utils import TLS_CLIENT_AVAILABLE, CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE, tls_client
+    from app.utils.core_utils import TLS_CLIENT_AVAILABLE, CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE, tls_client
     # tls_client should be None if not available, or the module
     assert tls_client is None or hasattr(tls_client, 'Session')

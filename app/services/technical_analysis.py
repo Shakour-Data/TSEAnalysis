@@ -9,14 +9,67 @@ import jdatetime
 import io
 import base64
 import logging
+from app.utils.nan_handler import NaNHandler
 
 logger = logging.getLogger(__name__)
 
 class TechnicalAnalyzer:
     """
-    Encapsulates all technical analysis logic, including indicators, 
-    support/resistance levels, and chart generation.
+    تحلیل تکنیکی - شامل شناسایی و تصفیه داده‌های پرت
     """
+
+    @staticmethod
+    def detect_outliers(data, column='close', threshold=3.0):
+        """
+        شناسایی داده‌های پرت با استفاده از Z-score
+        - threshold=3.0: 99.7% از داده‌ها درون range
+        - threshold=2.5: 98.8% از داده‌ها درون range
+        """
+        if not data or not isinstance(data, list) or len(data) < 5:
+            return data, []
+        
+        try:
+            df = pd.DataFrame(data)
+            
+            if column not in df.columns:
+                logger.warning(f"Column {column} not found in data")
+                return data, []
+            
+            # Convert to numeric
+            df[column] = pd.to_numeric(df[column], errors='coerce')
+            
+            # Remove NaN
+            valid_df = df[df[column].notna()].copy()
+            
+            if len(valid_df) < 5:
+                return data, []
+            
+            # Calculate Z-score
+            mean = valid_df[column].mean()
+            std = valid_df[column].std()
+            
+            if std == 0:
+                return data, []
+            
+            z_scores = np.abs((valid_df[column] - mean) / std)
+            
+            # Find outliers
+            outlier_indices = z_scores[z_scores > threshold].index.tolist()
+            
+            if outlier_indices:
+                logger.warning(f"تشخیص {len(outlier_indices)} داده پرت در {column}")
+                
+                # Remove outliers
+                cleaned_data = [item for i, item in enumerate(data) if i not in outlier_indices]
+                outlier_data = [data[i] for i in outlier_indices]
+                
+                return cleaned_data, outlier_data
+            
+            return data, []
+        
+        except Exception as e:
+            logger.error(f"Outlier detection failed: {e}")
+            return data, []
 
     @staticmethod
     def detect_divergence(df, indicator_col='RSI', window=5):
@@ -45,7 +98,8 @@ class TechnicalAnalyzer:
             if recent_df.loc[p_max1_idx, 'high'] > recent_df.loc[p_max2_idx, 'high']:
                 if recent_df.loc[p_max1_idx, indicator_col] < recent_df.loc[p_max2_idx, indicator_col]:
                     return "Bearish Divergence (Negative)"
-        except:
+        except (KeyError, IndexError, ValueError) as e:
+            logger.debug(f"Divergence detection failed: {e}")
             pass
             
         return "Normal"
@@ -73,56 +127,145 @@ class TechnicalAnalyzer:
     @staticmethod
     def calculate_risk_reward(current_price, supports, resistances):
         """
-        Calculates suggested Entry, StopLoss and TakeProfit with R/R ratio.
+        خطرہ/انعام کا تناسب محفوظ طریقے سے
         """
         if not supports or not resistances:
             return None
             
-        # Best support for SL (nearest below), Best resistance for TP (nearest above)
-        sl = supports[0]['value'] * 0.98 # 2% below support
-        tp = resistances[0]['value'] * 0.98 # Just before resistance
-        
-        risk = current_price - sl
-        reward = tp - current_price
-        
-        if risk <= 0: return None
-        
-        rr_ratio = round(reward / risk, 2)
-        return {
-            'entry': current_price,
-            'stop_loss': round(sl, 0),
-            'take_profit': round(tp, 0),
-            'rr_ratio': rr_ratio,
-            'status': "Attractive" if rr_ratio > 2 else "Fair" if rr_ratio > 1.5 else "Risky"
-        }
+        try:
+            # Best support for SL (nearest below), Best resistance for TP (nearest above)
+            sl = supports[0]['value'] * 0.98 # 2% below support
+            tp = resistances[0]['value'] * 1.02 # 2% above resistance
+            
+            # Zero/negative check
+            if sl >= current_price or tp <= current_price:
+                return None
+            
+            risk = current_price - sl
+            reward = tp - current_price
+            
+            # Risk validation
+            if risk <= 0:
+                logger.warning(f"Invalid risk calculation: current={current_price}, sl={sl}")
+                return None
+            
+            # Division by zero protection
+            rr_ratio = round(reward / risk, 2) if risk != 0 else 0
+            
+            return {
+                'entry': round(current_price, 0),
+                'stop_loss': round(sl, 0),
+                'take_profit': round(tp, 0),
+                'rr_ratio': rr_ratio,
+                'status': "Attractive" if rr_ratio > 2 else "Fair" if rr_ratio > 1.5 else "Risky"
+            }
+        except (ValueError, ZeroDivisionError, TypeError) as e:
+            logger.error(f"Risk/Reward calculation failed: {e}")
+            return None
 
     @staticmethod
     def prepare_ohlcv_data(data):
+        """
+        معیاری OHLCV format - شامل outlier detection اور NaN handling
+        - صرف valid numeric data
+        - پرت‌ها شناسایی و حذف شود
+        - NaN values کو handle کریں
+        """
         if not data or not isinstance(data, list):
             return data
         
+        # Step 1: Outlier detection
+        cleaned_data, outliers = TechnicalAnalyzer.detect_outliers(data, column='pc', threshold=2.5)
+        
+        if outliers:
+            logger.info(f"✅ {len(outliers)} داده پرت حذف شد")
+        
+        data = cleaned_data
         standardized = []
+        nan_replaced = 0
+        
         for item in data:
-            # Map BrsApi historical keys (pc, pf, pmax, pmin, tvol, index) to standard OHLCV
-            # 'pc' = Previous Close/Close, 'pf' = First/Open, 'index' = Index value
-            close = item.get('pc') or item.get('close') or item.get('index') or item.get('value')
-            open_p = item.get('pf') or item.get('open') or close
-            high = item.get('pmax') or item.get('high') or close
-            low = item.get('pmin') or item.get('low') or close
-            volume = item.get('tvol') or item.get('volume') or 0
+            if not isinstance(item, dict):
+                continue
             
-            if close is not None:
+            try:
+                # صرف close پر کام ہو (ضروری فیلڈ)
+                close = item.get('pc') or item.get('close')
+                if close is None or NaNHandler.has_nan(close):
+                    continue
+                
+                # Convert to float - error check
+                try:
+                    close_val = float(close)
+                    if NaNHandler.has_nan(close_val):
+                        continue
+                except (ValueError, TypeError):
+                    logger.debug(f"Invalid close price: {close}")
+                    continue
+                
+                # Open, High, Low
+                try:
+                    open_raw = item.get('pf') or item.get('open') or close_val
+                    high_raw = item.get('pmax') or item.get('high') or close_val
+                    low_raw = item.get('pmin') or item.get('low') or close_val
+                    volume_raw = item.get('tvol') or item.get('volume') or 0
+                    
+                    # NaN check اور handling
+                    if NaNHandler.has_nan(open_raw):
+                        open_val = close_val
+                        nan_replaced += 1
+                    else:
+                        open_val = float(open_raw)
+                    
+                    if NaNHandler.has_nan(high_raw):
+                        high_val = close_val
+                        nan_replaced += 1
+                    else:
+                        high_val = float(high_raw)
+                    
+                    if NaNHandler.has_nan(low_raw):
+                        low_val = close_val
+                        nan_replaced += 1
+                    else:
+                        low_val = float(low_raw)
+                    
+                    if NaNHandler.has_nan(volume_raw):
+                        volume_val = 0
+                        nan_replaced += 1
+                    else:
+                        volume_val = int(volume_raw)
+                
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid OHLCV data: {e}")
+                    continue
+                
+                # Validation: High >= Low
+                if high_val < low_val:
+                    high_val, low_val = low_val, high_val
+                
+                # Close validation
+                if close_val > high_val:
+                    high_val = close_val
+                if close_val < low_val:
+                    low_val = close_val
+                
+                # Build standardized item
                 new_item = item.copy()
-                p_close = float(close)
-                rounding = 0 if p_close > 1000 else (1 if p_close > 100 else 2)
+                new_item['close'] = close_val
+                new_item['open'] = open_val
+                new_item['high'] = high_val
+                new_item['low'] = low_val
+                new_item['volume'] = volume_val
                 
-                new_item['close'] = round(p_close, rounding)
-                new_item['open'] = round(float(open_p), rounding)
-                new_item['high'] = round(float(high), rounding)
-                new_item['low'] = round(float(low), rounding)
-                new_item['volume'] = float(volume)
                 standardized.append(new_item)
-                
+            
+            except Exception as e:
+                logger.debug(f"OHLCV preparation error: {e}")
+                continue
+        
+        if nan_replaced > 0:
+            logger.info(f"✅ {nan_replaced} NaN values replace کیے گئے")
+        
         return standardized
 
     @staticmethod
@@ -179,12 +322,18 @@ class TechnicalAnalyzer:
         maxima = df[df['is_max']]['high'].tolist()
         
         def cluster_levels(levels, current_price, is_resistance=True):
-            if not levels: return []
+            if not levels: 
+                # Provide fallback levels if none found
+                if is_resistance:
+                    return [{'value': round(current_price * (1 + 0.02 * i)), 'hits': 1, 'strength': 1.0} for i in range(1, 6)]
+                else:
+                    return [{'value': round(current_price * (1 - 0.02 * i)), 'hits': 1, 'strength': 1.0} for i in range(1, 6)]
+
             clusters = []
             for l in sorted(levels):
                 found = False
                 for c in clusters:
-                    if abs(c['value'] - l) / l < 0.02:
+                    if abs(c['value'] - l) / l < 0.03: # Increased cluster tolerance
                         c['hits'] += 1
                         c['value'] = (c['value'] * (c['hits']-1) + l) / c['hits']
                         found = True
@@ -205,9 +354,17 @@ class TechnicalAnalyzer:
                 
             if is_resistance:
                 valid = [c for c in clusters if c['value'] > current_price]
+                # If less than 5, add extrapolated ones
+                while len(valid) < 5:
+                    last_val = valid[-1]['value'] if valid else current_price
+                    valid.append({'value': round(last_val * 1.03), 'hits': 0, 'strength': 0.5})
                 return sorted(valid, key=lambda x: x['value'])[:5]
             else:
                 valid = [c for c in clusters if c['value'] < current_price]
+                # If less than 5, add extrapolated ones
+                while len(valid) < 5:
+                    last_val = valid[-1]['value'] if valid else current_price
+                    valid.append({'value': round(last_val * 0.97), 'hits': 0, 'strength': 0.5})
                 return sorted(valid, key=lambda x: x['value'], reverse=True)[:5]
 
         current_price = df['close'].iloc[-1]
@@ -355,21 +512,28 @@ class TechnicalAnalyzer:
 
             # Beta calculation if index_data is provided
             beta_val = None
-            if index_data and isinstance(index_data, list):
+            if index_data and isinstance(index_data, list) and len(index_data) > 0:
                 try:
                     idf = pd.DataFrame(index_data)
-                    idf['close'] = pd.to_numeric(idf['close'], errors='coerce')
-                    idf = idf.sort_values('date')
-                    # Merge on date
-                    merged = pd.merge(df[['date', 'close']], idf[['date', 'close']], on='date', suffixes=('_s', '_i'))
-                    if len(merged) > 30:
-                        merged['ret_s'] = merged['close_s'].pct_change()
-                        merged['ret_i'] = merged['close_i'].pct_change()
-                        merged = merged.dropna()
-                        cov = merged['ret_s'].cov(merged['ret_i'])
-                        var = merged['ret_i'].var()
-                        beta_val = round(cov / var, 2)
-                except:
+                    # Normalize columns for index dataframe
+                    if 'pc' in idf.columns and 'close' not in idf.columns: idf['close'] = idf['pc']
+                    if 'time' in idf.columns and 'date' not in idf.columns: idf['date'] = idf['time']
+                    
+                    if 'close' in idf.columns and 'date' in idf.columns:
+                        idf['close'] = pd.to_numeric(idf['close'], errors='coerce')
+                        idf = idf.sort_values('date')
+                        # Merge on date
+                        merged = pd.merge(df[['date', 'close']], idf[['date', 'close']], on='date', suffixes=('_s', '_i'))
+                        if len(merged) > 30:
+                            merged['ret_s'] = merged['close_s'].pct_change()
+                            merged['ret_i'] = merged['close_i'].pct_change()
+                            merged = merged.dropna()
+                            cov = merged['ret_s'].cov(merged['ret_i'])
+                            var = merged['ret_i'].var()
+                            if var != 0:
+                                beta_val = round(cov / var, 2)
+                except Exception as e:
+                    logger.debug(f"Beta calculation error: {e}")
                     pass
 
             for col in df.select_dtypes(include=[np.number]).columns:
@@ -562,50 +726,61 @@ class TechnicalAnalyzer:
     @staticmethod
     def generate_strategy_matrix(current_price, supports, resistances):
         """
-        Generates a strategy matrix based on 4 dimensions:
-        1. Personality: Real, Legal
-        2. Risk: Aggressive, Neutral, Cautious
-        3. Return: Defensive, Balanced, Offensive
-        4. Horizon: Short, Medium, Long
+        Generates the specialized 6-profile strategy matrix correctly mapped to the 7-slide protocol.
         """
         if not current_price or not supports or not resistances:
             return []
 
         strategies = []
         
-        # Helper to get levels
-        s1 = supports[0]['value'] if len(supports) > 0 else current_price * 0.95
-        s2 = supports[1]['value'] if len(supports) > 1 else s1 * 0.95
-        r1 = resistances[0]['value'] if len(resistances) > 0 else current_price * 1.05
-        r2 = resistances[1]['value'] if len(resistances) > 1 else r1 * 1.05
-        r3 = resistances[2]['value'] if len(resistances) > 2 else r2 * 1.10
+        # Helper to get numeric value from supports/resistances which can be dicts or floats
+        def _get_val(lvl_list, index, fallback_mult):
+            if not lvl_list or len(lvl_list) <= index:
+                return current_price * fallback_mult
+            item = lvl_list[index]
+            if isinstance(item, dict):
+                return item.get('value', current_price * fallback_mult)
+            try:
+                return float(item)
+            except (ValueError, TypeError):
+                return current_price * fallback_mult
 
-        # Define 12 reasonable archetypes (covering the 54-state space meaningfully)
+        s1 = _get_val(supports, 0, 0.95)
+        s2 = _get_val(supports, 1, 0.90)
+        r1 = _get_val(resistances, 0, 1.05)
+        r2 = _get_val(resistances, 1, 1.10)
+        
+        # 6 Profiles requested in Slide 5
         archetypes = [
-            # 1. Personality | Risk | Return | Horizon
-            ("حقیقی", "جسور", "تهاجمی", "کوتاه مدت", "نوسان‌گیری سریع (Scalping)", f"خرید در {s1} - تریگر: واگرایی مثبت RSI", r1, s2, "ورود پله‌ای در حمایت‌های نزدیک"),
-            ("حقیقی", "جسور", "تهاجمی", "میان مدت", "معاملات تکانه‌ای (Momentum)", f"خرید در شکست {r1} - تریگر: حجم بالا", r2, s1, "تعقیب روند با حد ضرر شناور"),
-            ("حقیقی", "خنثی", "متعادل", "کوتاه مدت", "نوسان‌گیری کانالی", f"خرید در {s1} - تریگر: کندل برگشتی", r1, s2, "خرید در کف و فروش در سقف کانال"),
-            ("حقیقی", "خنثی", "متعادل", "میان مدت", "معاملات روندی (Trend Following)", f"خرید در تثبیت بالای SMA20", r2, s1, "صبر برای تایید روند و حفظ موقعیت"),
-            ("حقیقی", "محتاط", "تدافعی", "میان مدت", "سرمایه‌گذاری کم‌ریسک", f"خرید در {s1} - تریگر: اشباع فروش RSI", r1, s2, "تمرکز بر حفظ اصل سرمایه"),
-            ("حقیقی", "محتاط", "تدافعی", "بلند مدت", "ارزش‌محور (Value Investing)", f"خرید در {s2} - تریگر: نزدیکی به کف تاریخی", r2, s1, "نادیده گرفتن نوسانات موقت"),
-            ("حقوقی", "خنثی", "ارزشمند", "بلند مدت", "استراتژی انباشت (Accumulation)", f"خرید پله‌ای در محدوده {s1} تا {s2}", r3, s2 * 0.9, "ورود سنگین در نواحی حمایتی معتبر"),
-            ("حقوقی", "محتاط", "تدافعی", "بلند مدت", "مدیریت ثروت (Wealth Mgmt)", f"خرید در {s2} - تریگر: نسبت P/E تاریخی", r2, s2 * 0.85, "رویکرد صبورانه و خروج در سقف‌های قیمتی"),
-            ("حقیقی", "جسور", "متعادل", "کوتاه مدت", "معاملات خبری (Event Driven)", f"خرید در {current_price} - تریگر: اخبار رانتی/بنیادی", r1, current_price * 0.94, "ورود سریع و خروج با سود معقول"),
-            ("حقوقی", "جسور", "تهاجمی", "میان مدت", "بازارگردانی/حمایت", f"خرید در محدوده {s1}", r1, s2, "کنترل قیمت و جمع‌آوری سهم"),
-            ("حقیقی", "خنثی", "تهاجمی", "بلند مدت", "رشد‌محور (Growth)", f"خرید در {s1} - تریگر: گزارشات ماهانه مثبت", r3, s2, "سرمایه‌گذاری در شرکت‌های با پتانسیل رشد بالا"),
-            ("حقیقی", "محتاط", "متعادل", "بلند مدت", "سرمایه‌گذاری سنتی", f"خرید در {s1} - تریگر: تثبیت در کف", r2, s2, "تنوع‌بخشی به پرتفوی و دوری از هیجان")
+            ("سرمایه‌گذار محافظه‌کار", "ریسک‌گریز", "بلند مدت", s2, r1, s2 * 0.95, "ورود در لایه‌های حمایتی معتبر و خروج در اولین مقاومت سنگین"),
+            ("سرمایه‌گذار متعادل", "ریسک‌پذیر متوسط", "میان مدت", s1, r2, s2, "تعامل با نوسانات میانی و حفظ بخشی از سود در میانه راه"),
+            ("معامله‌گر تهاجمی", "ریسک‌پذیر بالا", "کوتاه مدت", current_price, r1, current_price * 0.97, "ورود با تریگر حجم و خروج سریع در تارگت‌های نوسانی"),
+            ("نوسان‌گیر روزانه (Scalper)", "فوق تهاجمی", "روزانه", current_price, current_price * 1.02, current_price * 0.99, "بهره‌گیری از نوسانات ۱ تا ۳ درصدی روزانه با استاپ بسیار نزدیک"),
+            ("سبدگردان (Portfolio)", "استراتژیک", "بلند مدت", f"محدوده {s1}-{s2}", r2, s2 * 0.9, "چینش پله‌ای سبد بر اساس ارزش ذاتی و میانگین کم کردن در حمایت‌ها"),
+            ("هج فاند (Hedge Fund)", "پیچیده", "متغیر", current_price, r2, s2, "استفاده از معاملات دوطرفه و پوشش ریسک بر اساس همبستگی با شاخص")
         ]
 
-        for p, risk, ret, hor, style, entry, target, sl, desc in archetypes:
+        for profile, personality, horizon, entry, target, sl, desc in archetypes:
+            risk = 0
+            reward = 0
+            rr_val = "1:2.0"
+            try:
+                # Basic RR calculation for display if entry is numeric
+                if isinstance(entry, (int, float)):
+                    risk = abs(entry - sl)
+                    reward = abs(target - entry)
+                    if risk > 0: rr_val = f"1:{round(reward/risk, 1)}"
+            except: pass
+
             strategies.append({
-                "پروفایل سرمایه‌گذار": f"{p} ({ret})",
-                "تیپ شخصیتی": risk,
-                "افق زمانی": hor,
+                "پروفایل سرمایه‌گذار": profile,
+                "تیپ شخصیتی": personality,
+                "افق زمانی": horizon,
                 "نقطه ورود": entry,
                 "حد ضرر (SL)": sl,
                 "حد سود (TP)": target,
-                "توضیحات استراتژی": f"{style}: {desc}"
+                "R/R": rr_val,
+                "توضیحات استراتژی": desc
             })
         return strategies
 

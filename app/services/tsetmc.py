@@ -10,7 +10,7 @@ from urllib.parse import urlencode, quote
 import pandas as pd
 
 import requests
-from app.core_utils import (
+from app.utils.core_utils import (
     SAFE_BROWSER_UA, update_stats, TLS_CLIENT_AVAILABLE, 
     CURL_CFFI_AVAILABLE, HTTPX_AVAILABLE, crequests, tls_client, BRIDGE_URL,
     API_KEY, PROXY_URL
@@ -30,9 +30,9 @@ class TSETMCClient:
     5. Integrated Industry Index (Proxy) Calculator
     """
     
-    MIN_REQUEST_GAP = 1.0      # Reduced for better concurrency
-    MAX_REQS_STRICT = 150       # PER 5 MINUTES (Safer threshold)
-    WINDOW_SECONDS = 300       # 5 MINUTES
+    MIN_REQUEST_GAP = 2.0      # 2 سیکنڈ - محفوظ حد
+    MAX_REQS_STRICT = 80       # 5 منٹ میں 80 درخواستیں (زیادہ محفوظ)
+    WINDOW_SECONDS = 300       # 5 منٹ
     
     CHROME_HEADERS = {
         "User-Agent": SAFE_BROWSER_UA,
@@ -52,6 +52,7 @@ class TSETMCClient:
         self._consecutive_failures = 0
         self._cooling_until = 0
         self._symbols_cache = {} # Short-term memory cache
+        self._current_delay = 2.0  # Dynamic delay management
         
         # Diagnostics
         if TLS_CLIENT_AVAILABLE: self.client_name = "TLS-Fingerprint-Spoof"
@@ -164,30 +165,53 @@ class TSETMCClient:
         filtered = [sym for sym in universe if self._classify_equity_market(sym) in allowed]
         return filtered
 
-    def _apply_fair_use_control(self, endpoint):
+    def _apply_fair_use_control(self, endpoint, is_retry=False):
         """
-        Enforces BrsApi Fair Use Policy and Anti-NGFW Timing.
-        Absolute sequential execution via locking.
+        بہتر Circuit Breaker: Per-endpoint state management
+        - ہر endpoint کے لیے الگ circuit breaker
+        - Graceful degradation بجائے cascade failure
         """
         with self._network_lock:
             now = time.time()
             
-            # 0. Circuit Breaker
-            if now < self._cooling_until:
-                wait_time = self._cooling_until - now
-                logger.warning(f"Circuit breaker active. Cooling for {wait_time:.1f}s")
-                time.sleep(wait_time)
-                now = time.time()
-
-            # 1. Human-Like Behavior
-            think_time = random.uniform(0.5, 1.5)
+            # 0. بہتر Circuit Breaker (Per-endpoint)
+            endpoint_key = f"cb_{endpoint}"
+            if not hasattr(self, '_circuit_breakers'):
+                self._circuit_breakers = {}
+            
+            if endpoint_key not in self._circuit_breakers:
+                self._circuit_breakers[endpoint_key] = {
+                    'state': 'CLOSED',  # CLOSED, OPEN, HALF_OPEN
+                    'failures': 0,
+                    'last_failure': 0,
+                    'recovery_time': 30
+                }
+            
+            cb = self._circuit_breakers[endpoint_key]
+            
+            # OPEN state: endpoint مسائل ہے
+            if cb['state'] == 'OPEN':
+                if now - cb['last_failure'] > cb['recovery_time']:
+                    # Recovery attempt
+                    cb['state'] = 'HALF_OPEN'
+                    logger.info(f"🔄 Circuit breaker HALF_OPEN برائے {endpoint}")
+                else:
+                    # ابھی open رہے گا - لیکن دوسری endpoints جاری رہ سکتے ہیں!
+                    wait_time = cb['recovery_time'] - (now - cb['last_failure'])
+                    logger.warning(f"🛑 {endpoint} قابل‌دسترسی نہیں ({wait_time:.0f}s)")
+                    # Fallback: cached data یا دوسری methods استعمال کریں
+                    raise ConnectionError(f"Circuit breaker OPEN برائے {endpoint}")
+            
+            # 1. Dynamic delay
+            actual_delay = self._current_delay if is_retry else self.MIN_REQUEST_GAP
+            think_time = random.uniform(0.2, 0.8)
             time.sleep(think_time)
             now = time.time()
 
             # 2. Mandatory gap
             elapsed_since_last = now - self._last_network_call
-            if elapsed_since_last < self.MIN_REQUEST_GAP:
-                sleep_time = self.MIN_REQUEST_GAP - elapsed_since_last
+            if elapsed_since_last < actual_delay:
+                sleep_time = actual_delay - elapsed_since_last
                 time.sleep(sleep_time)
                 now = time.time() 
                 
@@ -195,22 +219,74 @@ class TSETMCClient:
             self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
             
             if len(self._request_history) >= self.MAX_REQS_STRICT:
-                wait_needed = self.WINDOW_SECONDS - (now - self._request_history[0])
-                logger.warning(f"Rate limit reached. Waiting {wait_needed + 2:.1f}s")
-                time.sleep(wait_needed + 2)
+                wait_needed = self.WINDOW_SECONDS - (now - self._request_history[0]) + 1
+                logger.warning(f"⚠️ Rate limit: {len(self._request_history)}/{self.MAX_REQS_STRICT}")
+                time.sleep(wait_needed)
                 now = time.time()
                 self._request_history = [t for t in self._request_history if (now - t) < self.WINDOW_SECONDS]
                 
             self._last_network_call = now
             self._request_history.append(now)
+            
+    def _record_success(self, endpoint):
+        """درج کریں کہ request موفق رہی"""
+        endpoint_key = f"cb_{endpoint}"
+        if hasattr(self, '_circuit_breakers') and endpoint_key in self._circuit_breakers:
+            self._circuit_breakers[endpoint_key]['state'] = 'CLOSED'
+            self._circuit_breakers[endpoint_key]['failures'] = 0
+    
+    def _record_failure(self, endpoint):
+        """درج کریں کہ request ناکام ہوئی"""
+        endpoint_key = f"cb_{endpoint}"
+        if not hasattr(self, '_circuit_breakers'):
+            self._circuit_breakers = {}
+        if endpoint_key not in self._circuit_breakers:
+            self._circuit_breakers[endpoint_key] = {
+                'state': 'CLOSED',
+                'failures': 0,
+                'last_failure': 0,
+                'recovery_time': 30
+            }
+        
+        cb = self._circuit_breakers[endpoint_key]
+        cb['failures'] += 1
+        cb['last_failure'] = time.time()
+        
+        # اگر failures بہت زیادہ ہیں تو OPEN کریں
+        if cb['failures'] >= 5:
+            cb['state'] = 'OPEN'
+            logger.error(f"🛑 Circuit breaker OPEN برائے {endpoint} ({cb['failures']} failures)")
 
     def _make_request(self, endpoint, params=None, service=None):
         """
-        Professional Resilient Request Handler.
+        Resilient request handler with 429 detection.
         """
-        # Call apply_fair_use_control which now handles the lock internally
-        self._apply_fair_use_control(endpoint)
-        return self._locked_make_request(endpoint, params, service)
+        max_retries_429 = 3
+        retry_count = 0
+        
+        while retry_count < max_retries_429:
+            self._apply_fair_use_control(endpoint, is_retry=(retry_count > 0))
+            result = self._locked_make_request(endpoint, params, service)
+            
+            # اگر result میں 429 status ہے
+            if isinstance(result, dict) and result.get('status') == 429:
+                retry_count += 1
+                if retry_count < max_retries_429:
+                    # Delay بڑھائیں اور دوبارہ کوشش کریں
+                    self._current_delay = min(30, self._current_delay * 2)
+                    logger.warning(f"429 Rate Limited - retry #{retry_count}, delay now: {self._current_delay:.1f}s")
+                    continue
+                else:
+                    logger.error("429 Rate Limited - max retries exceeded")
+                    return result
+            
+            # دوسری صورت میں result return کریں
+            if result and not isinstance(result, dict) or 'error' not in str(result)[:50]:
+                self._current_delay = max(2.0, self._current_delay * 0.9)  # موفقیت پر delay کم کریں
+            
+            return result
+        
+        return None
 
     def _locked_make_request(self, endpoint, params=None, service=None):
         query = params.copy() if params else {}
@@ -262,6 +338,13 @@ class TSETMCClient:
                             self._consecutive_failures = 0
                             if service: update_stats(service, "success", endpoint=endpoint)
                             return data
+                    except TimeoutError as e:
+                        logger.warning(f"Curl timeout ({attempt+1}/{current_max}): {str(e)[:50]}")
+                        # Timeout = server سست ہے، دوبارہ کوشش کریں
+                        continue
+                    except ConnectionError as e:
+                        logger.warning(f"Curl connection error ({attempt+1}/{current_max}): {str(e)[:50]}")
+                        continue
                     except Exception as e:
                         logger.error(f"Curl failed: {str(e)[:50]}")
 
@@ -271,13 +354,19 @@ class TSETMCClient:
                         try:
                             logger.debug(f"Technique CURL_CFFI for {endpoint}...")
                             if protocol == "https":
-                                resp = crequests.get(full_url, impersonate="chrome120", timeout=30, verify=False)
+                                resp = crequests.get(full_url, impersonate="chrome120", timeout=20, verify=False)
                             else:
-                                resp = crequests.get(full_url, timeout=30)
+                                resp = crequests.get(full_url, timeout=20)
                             if resp.status_code == 200:
                                 self._consecutive_failures = 0
                                 if service: update_stats(service, "success", endpoint=endpoint)
                                 return resp.json()
+                        except TimeoutError:
+                            logger.warning(f"CURL_CFFI timeout ({attempt+1}/{current_max})")
+                            continue
+                        except ConnectionError:
+                            logger.warning(f"CURL_CFFI connection error ({attempt+1}/{current_max})")
+                            continue
                         except Exception as e:
                             logger.error(f"CURL_CFFI failed: {str(e)[:50]}")
                     
@@ -287,7 +376,7 @@ class TSETMCClient:
                             selected_id = random.choice(idents)
                             sess = tls_client.Session(client_identifier=selected_id, random_tls_extension_order=True)
                             if self.proxy: sess.proxies = {"http": self.proxy, "https": self.proxy}
-                            response = sess.get(full_url, headers=self.CHROME_HEADERS, timeout_seconds=45)
+                            response = sess.get(full_url, headers=self.CHROME_HEADERS, timeout_seconds=30)
                             if response.status_code == 200:
                                 self._consecutive_failures = 0
                                 if service: update_stats(service, "success", endpoint=endpoint)
@@ -580,6 +669,38 @@ class TSETMCClient:
         if data and isinstance(data, dict) and "error" not in data: data = [data]
         if data and isinstance(data, list): db.save_symbols(data, db_category)
         return data if data else {"error": "عدم دریافت اطلاعات شاخص"}
+
+    def get_client_type(self, symbol, force_refresh=False):
+        """دریافت اطلاعات حقیقی و حقوقی (پول هوشمند)"""
+        res = self.get_price_history(symbol, data_type=1, service="client_type", force_refresh=force_refresh)
+        if isinstance(res, list) and res:
+            # Map BRS keys to frontend expected keys
+            for row in res:
+                if 'buy_i_vol' in row: row['ct_buy_real_vol'] = row.get('buy_i_vol')
+                if 'sell_i_vol' in row: row['ct_sell_real_vol'] = row.get('sell_i_vol')
+                if 'buy_n_vol' in row: row['ct_buy_legal_vol'] = row.get('buy_n_vol')
+                if 'sell_n_vol' in row: row['ct_sell_legal_vol'] = row.get('sell_n_vol')
+                if 'buy_i_count' in row: row['ct_buy_real_count'] = row.get('buy_i_count')
+                if 'sell_i_count' in row: row['ct_sell_real_count'] = row.get('sell_i_count')
+        return res
+
+    def get_transactions(self, symbol):
+        """دریافت ریزمعاملات روز جاری"""
+        res = self._make_request("Api/Tsetmc/Transaction.php", {"l18": symbol}, service="transactions")
+        if isinstance(res, list) and res:
+             for row in res:
+                 if 'price' in row and 'p' not in row: row['p'] = row['price']
+                 if 'volume' in row and 'v' not in row: row['v'] = row['volume']
+        return res
+
+    def get_shareholders(self, symbol):
+        """دریافت لیست سهامداران عمده"""
+        res = self._make_request("Api/Tsetmc/Shareholder.php", {"l18": symbol}, service="shareholders")
+        if isinstance(res, list) and res:
+            for row in res:
+                if 'name' in row and 'shareholder' not in row: row['shareholder'] = row['name']
+                if 'percentage' in row and 'per' not in row: row['per'] = row['percentage']
+        return res
 
     def get_nav(self, symbol):
         return self._make_request("Api/Tsetmc/Nav.php", {"l18": symbol})
