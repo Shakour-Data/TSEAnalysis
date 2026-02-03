@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tse-analysis"
-version = "1.0.1"
+version = "2.0.0"
 description = "TSE (Tehran Stock Exchange) Analysis System with AI-powered price prediction"
 readme = "README.md"
 license = {text = "MIT"}

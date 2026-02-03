@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-03
+
+### Added
+- Comprehensive documentation structure with organized subdirectories
+- Detailed API reference documentation
+- Complete installation guide
+- System architecture documentation
+- Enhanced project organization and maintainability
+
+### Improved
+- Documentation quality and completeness
+- Project structure for better developer experience
+- Code organization with modular utilities
+
+### Changed
+- Major version bump to reflect significant improvements in documentation and project maturity
+
 ## [1.0.1] - 2026-02-03
 
 ### Added
