@@ -78,7 +78,7 @@ def test_prioritize_indicators(sample_df):
         assert 'name' in rankings[0]
         assert 'accuracy' in rankings[0]
 
-def test_prepare_ohlcv_data():
+def test_prepare_ohlcv_data_simple():
     raw_data = [
         {"close": 100, "date": "2023-01-01", "volume": 10},
         {"close": 110, "date": "2023-01-02", "volume": 20}
@@ -88,7 +88,7 @@ def test_prepare_ohlcv_data():
     assert "close" in prepared[0]
     assert prepared[0]["close"] == 100
 
-def test_resample_to_weekly():
+def test_resample_to_weekly_simple():
     daily_data = [
         {"date": f"2023-01-{i+1:02d}", "open": 100, "high": 110, "low": 90, "close": 105, "volume": 1000}
         for i in range(21) # 3 weeks
