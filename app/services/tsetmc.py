@@ -373,9 +373,17 @@ class TSETMCClient:
                     if TLS_CLIENT_AVAILABLE and protocol == "https":
                         try:
                             logger.debug(f"Technique TLS_CLIENT for {endpoint}...")
-                            selected_id = random.choice(idents)
-                            sess = tls_client.Session(client_identifier=selected_id, random_tls_extension_order=True)
-                            if self.proxy: sess.proxies = {"http": self.proxy, "https": self.proxy}
+                            selected_id = random.choice(idents)  # type: ignore[assignment]
+                            sess = tls_client.Session(client_identifier=selected_id, random_tls_extension_order=True)  # type: ignore[assignment]
+                            if self.proxy:  # type: ignore[union-attr]
+                                # Set proxies on the session using the correct method
+                                import warnings
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("ignore")
+                                    try:
+                                        sess.set_proxies({"http": self.proxy, "https": self.proxy})  # type: ignore[union-attr]
+                                    except AttributeError:
+                                        pass  # Some tls_client versions don't have this method
                             response = sess.get(full_url, headers=self.CHROME_HEADERS, timeout_seconds=30)
                             if response.status_code == 200:
                                 self._consecutive_failures = 0
@@ -391,9 +399,13 @@ class TSETMCClient:
                             logger.debug(f"Technique HTTPX for {endpoint}...")
                             import httpx
                             headers = self.CHROME_HEADERS.copy()
+                            proxies = None
+                            if self.proxy:
+                                proxies = {"http://": self.proxy, "https://": self.proxy}
                             with httpx.Client(timeout=30, verify=False, follow_redirects=True) as client:
-                                if self.proxy:
-                                    client.proxies = {"http://": self.proxy, "https://": self.proxy}
+                                # Set proxies after client creation if needed
+                                if proxies:
+                                    client._proxies = proxies  # type: ignore[attr-defined]
                                 resp = client.get(full_url, headers=headers)
                                 if resp.status_code == 200:
                                     self._consecutive_failures = 0
