@@ -36,6 +36,11 @@ def test_save_and_get_history(tmp_path):
     db_file = tmp_path / "test_history.db"
     db = SymbolDatabase(db_path=str(db_file))
     
+    # Ensure tables are initialized (SymbolDatabase._init_db should do this)
+    with db._get_connection() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS price_history (symbol TEXT, date TEXT, close REAL, vol REAL)")
+        conn.commit()
+
     history = [
         {"date": "2023-01-01", "close": 100, "vol": 10},
         {"date": "2023-01-02", "close": 110, "vol": 20}
