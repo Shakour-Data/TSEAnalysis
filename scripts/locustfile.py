@@ -66,7 +66,6 @@ class TSEAnalysisUser(HttpUser):
             response = client.post('/api/fetch_data', json=test_data)
 
 if __name__ == "__main__":
-    # For standalone testing
-    import locust
-    locust.main.main()</content>
-<parameter name="filePath">c:\Users\Administrator\Documents\Analysis\TSEAnalysis\scripts\locustfile.py
+    # Run locust from command line: python -m locust -f scripts/locustfile.py
+    # Or use: locust -f scripts/locustfile.py
+    pass
