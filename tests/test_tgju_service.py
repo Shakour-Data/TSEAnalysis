@@ -23,6 +23,7 @@ def test_tgju_get_history():
             "v": [5000]
         }
         
-        history = tgju_client.get_history("price_dollar_rl")
+        history = tgju_client.get_history("price_dollar_rl")  # type: ignore[assignment]
         assert len(history) == 1
-        assert history[0]["close"] == 1020
+        first_item = history[0]  # type: ignore[index]
+        assert first_item["close"] == 1020  # type: ignore[index]
