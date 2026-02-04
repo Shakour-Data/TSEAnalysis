@@ -2,8 +2,12 @@ import os
 import requests
 import requests.utils
 import urllib3
+import logging
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 # ===== FIREWALL NUCLEAR OPTION =====
 # WARNING: These techniques may violate website TOS and could be illegal.
@@ -48,7 +52,7 @@ def _get_api_key():
     ترتیب:
     1. Environment variable (بہترین)
     2. .env file
-    3. error اگر موجود نہیں
+    3. error اگر موجود نہیں (نه fallback)
     """
     key = os.getenv('TSE_API_KEY')
     
@@ -58,20 +62,23 @@ def _get_api_key():
             from dotenv import load_dotenv
             load_dotenv()
             key = os.getenv('TSE_API_KEY')
-        except:
+        except ImportError:
             pass
     
     if not key:
-        import logging
-        logging.warning("⚠️ TSE_API_KEY environment variable not set! Using fallback.")
-        # Fallback - لیکن warning دیں
-        key = 'guest_mode'
+        logger.error("⚠️ TSE_API_KEY environment variable not set! API access will be limited.")
+        logger.error("   Set TSE_API_KEY or add .env file with TSE_API_KEY=your_key")
+        return None  # No fallback - require proper configuration
     
     return key
 
 API_KEY = _get_api_key()
 BRIDGE_URL = os.getenv('BRIDGE_URL')
 PROXY_URL = os.getenv('PROXY_URL')
+
+# Validate API key at startup
+if API_KEY is None:
+    logger.warning("⚠️ API key not configured - some features will be disabled")
 
 stats = {
     "global": {"total": 0, "blocked": 0, "success": 0},
