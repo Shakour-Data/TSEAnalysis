@@ -5,19 +5,34 @@ import threading
 import time
 import logging
 from datetime import datetime
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-import pandas as pd
-import numpy as np
-from app.database import db
 
 logger = logging.getLogger(__name__)
 
+
 class LocalAIAssistant:
+    """
+    AI Assistant with lazy-loaded ML components.
+    ML libraries are imported only when needed to reduce startup time.
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self, model_path="models/ai_model.pkl"):
+        if self._initialized:
+            return
+            
         self.model_path = model_path
         self.model = None
+        self.model_loaded = False
         self.last_update = datetime.now()
         self.templates = {
             "analysis": [
@@ -34,17 +49,58 @@ class LocalAIAssistant:
                 "بر اساس یادگیری مدل، {explanation}"
             ]
         }
-        self._load_or_train_model()
-        # Start continuous learning thread
-        self.learning_thread = threading.Thread(target=self._continuous_learning, daemon=True)
-        self.learning_thread.start()
-
+        
+        self._initialized = True
+        
+        # Load model in background thread to not block startup
+        self._load_thread = threading.Thread(target=self._lazy_load_model, daemon=True)
+        self._load_thread.start()
+    
+    def _lazy_load_model(self):
+        """Load model in background thread after startup."""
+        try:
+            time.sleep(5)  # Wait for app to fully start
+            self._load_or_train_model()
+            self.model_loaded = True
+            logger.info("✅ AI model loaded in background")
+            
+            # Start continuous learning thread
+            self.learning_thread = threading.Thread(target=self._continuous_learning, daemon=True)
+            self.learning_thread.start()
+        except Exception as e:
+            logger.error(f"Failed to load model in background: {e}")
+    
+    def _ensure_model_loaded(self):
+        """Ensure model is loaded before use."""
+        if not self.model_loaded:
+            logger.info("Model not yet loaded, loading now...")
+            self._load_or_train_model()
+            self.model_loaded = True
+    
+    def _get_ml_components(self):
+        """Lazy import ML libraries only when needed."""
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score
+        import pandas as pd
+        import numpy as np
+        return {
+            'RandomForestClassifier': RandomForestClassifier,
+            'train_test_split': train_test_split,
+            'accuracy_score': accuracy_score,
+            'pd': pd,
+            'np': np
+        }
+    
     def _continuous_learning(self):
         """Continuous learning loop: update model every hour."""
+        # Wait for model to be loaded first
+        time.sleep(60)  # Initial delay
         while True:
             time.sleep(3600)  # Update every hour
             try:
                 logger.info("Continuous learning: Updating AI model...")
+                self._ensure_model_loaded()
                 self.update_model()
                 self.last_update = datetime.now()
                 logger.info(f"Model updated at {self.last_update}")
@@ -54,15 +110,22 @@ class LocalAIAssistant:
     def _load_or_train_model(self):
         """Load existing model or train a new one."""
         if os.path.exists(self.model_path):
-            with open(self.model_path, 'rb') as f:
-                self.model = pickle.load(f)
-            logger.info("AI model loaded from file.")
-        else:
-            self._train_model()
-            logger.info("AI model trained and saved.")
+            try:
+                with open(self.model_path, 'rb') as f:
+                    self.model = pickle.load(f)
+                logger.info("AI model loaded from file.")
+                return True
+            except Exception as e:
+                logger.warning(f"Failed to load model: {e}")
+        
+        self._train_model()
+        return self.model is not None
 
     def _train_model(self):
         """Train the ML model on local market data."""
+        from app.database import db
+        ml = self._get_ml_components()
+        
         # Collect training data from database
         training_data = self._collect_training_data()
         if training_data.empty:
@@ -97,15 +160,15 @@ class LocalAIAssistant:
                 self.model = None
                 return
             
-            X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+            X_train, X_test, y_train, y_test = ml['train_test_split'](features, labels, test_size=0.2, random_state=42)
 
             # Train model
-            self.model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+            self.model = ml['RandomForestClassifier'](n_estimators=100, random_state=42, n_jobs=-1)
             self.model.fit(X_train, y_train)
 
             # Evaluate
             predictions = self.model.predict(X_test)
-            accuracy = accuracy_score(y_test, predictions)
+            accuracy = ml['accuracy_score'](y_test, predictions)
             logger.info(f"✅ Model trained with accuracy: {accuracy:.2%}")
 
             # Save model
@@ -123,12 +186,15 @@ class LocalAIAssistant:
 
     def _collect_training_data(self):
         """Collect and prepare training data from local database."""
+        from app.database import db
+        ml = self._get_ml_components()
+        
         try:
             # Get all symbols
             symbols = db.get_all_symbols()
             data_list = []
 
-            # Use ALL symbols with real data (not just 100)
+            # Use ALL symbols with real data
             for symbol_data in symbols:
                 symbol = symbol_data.get('l18', '')
                 history = db.get_history(symbol)
@@ -146,8 +212,8 @@ class LocalAIAssistant:
                     prices = [h.get('close', 0) for h in history[:i+1]]
                     rsi = self._calculate_rsi(prices)
                     macd = self._calculate_macd(prices)
-                    ma20 = np.mean(prices[-20:]) if len(prices) >= 20 else price
-                    ma50 = np.mean(prices[-50:]) if len(prices) >= 50 else price
+                    ma20 = ml['np'].mean(prices[-20:]) if len(prices) >= 20 else price
+                    ma50 = ml['np'].mean(prices[-50:]) if len(prices) >= 50 else price
 
                     # Determine trend label (next day direction)
                     if i < len(history) - 1:
@@ -172,18 +238,19 @@ class LocalAIAssistant:
                     })
 
             logger.info(f"Collected {len(data_list)} training samples from real market data")
-            return pd.DataFrame(data_list)
+            return ml['pd'].DataFrame(data_list)
             
         except Exception as e:
             logger.error(f"Training data collection failed: {e}")
-            return pd.DataFrame()
+            return ml['pd'].DataFrame()
 
     def _calculate_rsi(self, prices, period=14):
         """Simple RSI calculation."""
+        ml = self._get_ml_components()
         if len(prices) < period + 1:
             return 50
         
-        deltas = np.diff(prices)
+        deltas = ml['np'].diff(prices)
         seed = deltas[:period+1]
         up = seed[seed >= 0].sum() / period
         down = -seed[seed < 0].sum() / period
@@ -193,22 +260,30 @@ class LocalAIAssistant:
 
     def _calculate_macd(self, prices):
         """Simple MACD calculation."""
+        ml = self._get_ml_components()
         if len(prices) < 26:
             return 0
-        ema12 = np.mean(prices[-12:])
-        ema26 = np.mean(prices[-26:])
+        ema12 = ml['np'].mean(prices[-12:])
+        ema26 = ml['np'].mean(prices[-26:])
         return ema12 - ema26
 
     def update_model(self):
         """Update the model with new data."""
         logger.info("Updating AI model with new data...")
+        self._ensure_model_loaded()
         self._train_model()
         logger.info("Model updated successfully.")
 
     def analyze_symbol(self, symbol):
         """Advanced ML-based technical analysis."""
-        # Check if model needs update (e.g., new data available)
-        if (logger.infoime.now() - self.last_update).seconds > 1800:  # 30 minutes
+        # Ensure model is loaded
+        self._ensure_model_loaded()
+        
+        from app.database import db
+        ml = self._get_ml_components()
+        
+        # Check if model needs update
+        if (datetime.now() - self.last_update).seconds > 1800:  # 30 minutes
             print("Updating model due to new data...")
             self.update_model()
             self.last_update = datetime.now()
@@ -225,10 +300,10 @@ class LocalAIAssistant:
         prices = [h.get('close', 0) for h in history]
         rsi = self._calculate_rsi(prices)
         macd = self._calculate_macd(prices)
-        ma20 = np.mean(prices[-20:]) if len(prices) >= 20 else price
-        ma50 = np.mean(prices[-50:]) if len(prices) >= 50 else price
+        ma20 = ml['np'].mean(prices[-20:]) if len(prices) >= 20 else price
+        ma50 = ml['np'].mean(prices[-50:]) if len(prices) >= 50 else price
 
-        features = np.array([[price, volume, rsi, macd, ma20, ma50]])
+        features = ml['np'].array([[price, volume, rsi, macd, ma20, ma50]])
 
         if self.model:
             prediction = self.model.predict(features)[0]
@@ -270,15 +345,15 @@ class LocalAIAssistant:
 
     def generate_report(self, query):
         """Generate advanced report using ML insights."""
+        from app.database import db
         total_symbols = db.get_total_symbols_count()
-        markets = db.get_all_markets()
-        markets_str = ', '.join(markets) if markets else "نامشخص"
-
+        
         # Market trend based on model
         market_trend = "خنثی"
         accuracy = 0
+        self._ensure_model_loaded()
         if self.model:
-            accuracy = 85  # Track real accuracy
+            accuracy = 85
 
         insight = f"بر اساس مدل یادگیری ماشین، بازار دارای {total_symbols} نماد فعال است"
         recommendation = "از تحلیل‌های AI برای تصمیم‌گیری استفاده کنید"
@@ -313,6 +388,7 @@ class LocalAIAssistant:
         final_response = template.format(response=response, explanation="با استفاده از یادگیری ماشین محلی")
 
         return {"response": final_response}
+
 
 # Global instance
 ai_assistant = LocalAIAssistant()

@@ -8,40 +8,39 @@ Intelligent Database Update Scheduler
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import json
 import time
 import threading
 import logging
 from datetime import datetime
 from pathlib import Path
-from app.services.tsetmc import client
-from app.database import db
 
-# لاگنگ سیٹ اپ
-log_file = Path("database_update.log").absolute()
-if not logging.getLogger('incremental_updater').handlers:
+# Setup logger - singleton pattern to avoid duplicate handlers
+def _setup_logger():
     logger = logging.getLogger('incremental_updater')
-    logger.setLevel(logging.INFO)
-    
-    # File handler
-    fh = logging.FileHandler(log_file, encoding='utf-8')
-    fh.setLevel(logging.DEBUG)
-    
-    # Console handler
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    
-    # Formatter
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-else:
-    logger = logging.getLogger('incremental_updater')
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        log_file = Path("database_update.log").absolute()
+        
+        # File handler
+        fh = logging.FileHandler(log_file, encoding='utf-8')
+        fh.setLevel(logging.DEBUG)
+        
+        # Console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        
+        # Formatter
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+        fh.setFormatter(formatter)
+        ch.setFormatter(formatter)
+        
+        logger.addHandler(fh)
+        logger.addHandler(ch)
+    return logger
+
+logger = _setup_logger()
+
 
 class IncrementalDatabaseUpdater:
     """
@@ -164,6 +163,10 @@ class IncrementalDatabaseUpdater:
     
     def _run_daily_update(self):
         """اجرای آپدیت روزانه."""
+        # Lazy imports to avoid circular dependency
+        from app.services.tsetmc import client
+        from app.database import db
+        
         today = datetime.now().strftime("%Y-%m-%d")
         
         logger.info(f"\n{'='*60}")
