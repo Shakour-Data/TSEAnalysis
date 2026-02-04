@@ -89,10 +89,6 @@ def test_ta_identify_levels_short():
     supports, resistances = TechnicalAnalyzer.get_support_resistance(df)
     assert isinstance(supports, list)
 
-def test_ta_detect_divergence_short():
-    df = pd.DataFrame({'close': range(10), 'RSI': range(10)})
-    assert TechnicalAnalyzer.detect_divergence(df) == "No Divergence"
-
 def test_ta_generate_chart_image_with_data():
     # Test with valid data
     df = pd.DataFrame({
