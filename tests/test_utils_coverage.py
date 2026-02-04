@@ -55,10 +55,9 @@ def test_core_utils_full_coverage():
     # update_stats & _get_api_key
     for status in ["success", "fail", "timeout", "blocked", "unknown_status"]:
         update_stats("test_stat", status)
-    assert _get_api_key() is not None
-
-# 2. DateFormatter Tests
-def test_date_formatter_full_coverage():
+        
+        with patch('app.utils.core_utils.os.getenv', return_value='test_api_key'):
+            assert _get_api_key() == 'test_api_key'
     """Covers all branches in DateFormatter"""
     assert DateFormatter.to_gregorian("1401-05-10") == "2022-08-01"
     assert DateFormatter.to_gregorian(None) is None
@@ -132,7 +131,8 @@ def test_encoding_handler_full_coverage():
     assert EncodingHandler.remove_control_characters(123) == 123
     assert EncodingHandler.detect_encoding(b'\xc7\x84\xc7\x81\xc7\x84\xc7\x85') == 'utf-8'
     assert EncodingHandler.safe_json_dumps(datetime.now()) is not None
-    assert EncodingHandler.safe_json_loads('{"a":1}')["a"] == 1
+    result = EncodingHandler.safe_json_loads('{"a":1}')
+    assert result is not None and result["a"] == 1  # type: ignore[index]
     assert EncodingHandler.sanitize_string(" test ", 3, ellipsis="") == "tes"
     assert EncodingHandler.sanitize_string(123) == "123"
     assert EncodingHandler.urlencode_safely("a/b") == "a%2Fb"
