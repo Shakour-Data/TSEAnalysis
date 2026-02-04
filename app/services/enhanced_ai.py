@@ -287,23 +287,25 @@ class EnhancedAIAssistant:
             # Volume MA
             volume_ma = np.mean(volumes[-20:])
             
+            # Convert numpy types to float for type compatibility
+            # type: ignore[arg-type]
             return TechnicalIndicators(
-                price=price,
-                volume=volume,
-                rsi=rsi,
-                macd=macd,
-                macd_signal=macd_signal,
-                macd_histogram=macd_histogram,
-                sma_20=sma_20,
-                sma_50=sma_50,
-                sma_200=sma_200,
-                bollinger_upper=bollinger_upper,
-                bollinger_middle=bollinger_middle,
-                bollinger_lower=bollinger_lower,
-                atr=atr,
-                adx=adx,
-                obv=obv,
-                volume_ma=volume_ma
+                price=float(price) if price is not None else 0.0,
+                volume=int(volume) if volume is not None else 0,
+                rsi=float(rsi) if rsi is not None else 0.0,
+                macd=float(macd) if macd is not None else 0.0,
+                macd_signal=float(macd_signal) if macd_signal is not None else 0.0,
+                macd_histogram=float(macd_histogram) if macd_histogram is not None else 0.0,
+                sma_20=float(sma_20) if sma_20 is not None else 0.0,
+                sma_50=float(sma_50) if sma_50 is not None else 0.0,
+                sma_200=float(sma_200) if sma_200 is not None else 0.0,
+                bollinger_upper=float(bollinger_upper) if bollinger_upper is not None else 0.0,
+                bollinger_middle=float(bollinger_middle) if bollinger_middle is not None else 0.0,
+                bollinger_lower=float(bollinger_lower) if bollinger_lower is not None else 0.0,
+                atr=float(atr) if atr is not None else 0.0,
+                adx=float(adx) if adx is not None else 0.0,
+                obv=int(obv) if obv is not None else 0,
+                volume_ma=float(volume_ma) if volume_ma is not None else 0.0
             )
         except Exception as e:
             logger.error(f"Error calculating indicators: {e}")
@@ -681,7 +683,8 @@ class EnhancedAIAssistant:
             features = self._create_enhanced_features(training_data)
             labels = training_data['trend']
             
-            if len(features) < 50:
+            # type: ignore[union-attr]
+            if features is None or len(features) < 50:
                 logger.warning("Not enough training data")
                 return
             
@@ -741,7 +744,7 @@ class EnhancedAIAssistant:
             logger.error(f"Model training failed: {e}")
             self.model = None
     
-    def _create_enhanced_features(self, df) -> any:
+    def _create_enhanced_features(self, df):
         """Create enhanced features for ML training"""
         ml = self._get_ml_components()
         if not ml:
@@ -786,11 +789,11 @@ class EnhancedAIAssistant:
             logger.error(f"Feature creation error: {e}")
             return None
     
-    def _collect_training_data(self) -> any:
+    def _collect_training_data(self) -> any: # type: ignore[no-untyped-def]
         """Collect and prepare training data"""
         ml = self._get_ml_components()
         if not ml:
-            return ml['pd'].DataFrame()
+            return None
         
         from app.database import db
         
@@ -898,9 +901,9 @@ class EnhancedAIAssistant:
 ### باندهای بولینگر
 | سطح | قیمت |
 |:---|:---:|
-| بالا | {analysis.bollinger_upper:,.0f} |
-| میانه | {analysis.bollinger_middle:,.0f} |
-| پایین | {analysis.bollinger_lower:,.0f} |
+| بالا | {analysis.indicators.bollinger_upper:,.0f} |
+| میانه | {analysis.indicators.bollinger_middle:,.0f} |
+| پایین | {analysis.indicators.bollinger_lower:,.0f} |
 
 ---
 
