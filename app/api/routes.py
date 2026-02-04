@@ -21,10 +21,15 @@ from app.services.local_ai_assistant import ai_assistant
 from app.services.enhanced_ai import enhanced_ai, EnhancedAIAssistant
 from app.services.technical_analysis_enhanced import TechnicalAnalyzer as EnhancedTechnicalAnalyzer
 from app.services.autonomous_ai import content_generator, continuous_learning
+from app.services.feature_optimizer import (
+    realtime_optimizer, ai_optimizer, db_optimizer, 
+    ta_optimizer, api_optimizer, update_optimizer, fallback_optimizer
+)
 from app.database import db
 from app.utils.core_utils import PROXY_URL, stats
 from app import cache
 from app.utils.circuit_breaker import get_circuit_status, circuit_breaker, CircuitBreakerOpenError
+from app.services.test_runner import test_runner
 
 logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
@@ -82,6 +87,29 @@ def api_test():
 @main_bp.route('/management')
 def management():
     return render_template('management.html')
+
+# --- Web-based Test Runner Endpoints ---
+
+@main_bp.route('/api/tests/run', methods=['POST'])
+def run_tests_api():
+    """Trigger a test suite execution"""
+    # In production, check for admin session here
+    data = request.json or {}
+    suite = data.get('suite', 'tests/')
+    
+    run_id = test_runner.run_test_suite(suite)
+    return jsonify({
+        "status": "started",
+        "run_id": run_id,
+        "message": f"Test suite {suite} started in background."
+    })
+
+@main_bp.route('/api/tests/results')
+def get_test_results():
+    """Get list of recent test runs"""
+    limit = request.args.get('limit', 10, type=int)
+    results = test_runner.get_recent_results(limit)
+    return jsonify(results)
 
 @main_bp.route('/api/clear_cache', methods=['POST'])
 def clear_cache():
