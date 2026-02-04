@@ -60,7 +60,7 @@ def create_app():
                  }
              },
              supports_credentials=True
-        )
+        ) if CORS is not None else None
         
         if origins:
             logger.info(f"✅ CORS configured with allowed origins: {origins}")
@@ -118,14 +118,11 @@ def create_app():
     
     # Optional: Register update_bp if it exists
     try:
-        from app.api.routes import update_bp
+        from app.api.updates_routes import update_bp
         app.register_blueprint(update_bp)
-    except ImportError:
-        try:
-            from app.api.updates_routes import update_bp
-            app.register_blueprint(update_bp)
-        except ImportError:
-            logger.debug("update_bp not found - skipping")
+        logger.info("✅ update_bp registered successfully")
+    except (ImportError, AttributeError) as e:
+        logger.debug(f"update_bp not available: {e}")
     
     # Global Exception Handlers
     @app.errorhandler(404)
@@ -142,19 +139,20 @@ def create_app():
         }), 500
     
     @app.errorhandler(Exception)
-    def handle_exception(error):
+    def handle_exception(error: Exception) -> tuple[dict, int]:
+        """Handle all uncaught exceptions"""
         from werkzeug.exceptions import HTTPException
         if isinstance(error, HTTPException):
-            return jsonify({
+            return {
                 "error": error.name,
                 "message": error.description
-            }), error.code
+            }, error.code or 500
         
         logger.error(f"Unhandled Exception: {error}", exc_info=True)
-        return jsonify({
+        return {
             "error": "غیر متوقع خرابی",
             "details": str(error)[:100]
-        }), 500
+        }, 500
     
     # Preload logic - Run once in a thread
     def start_preload():
