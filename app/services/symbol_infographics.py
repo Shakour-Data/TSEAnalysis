@@ -5,6 +5,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
+import seaborn as sns
 import logging
 from typing import Dict, List, Optional, Tuple
 from app.utils.core_utils import CoreUtils
@@ -18,6 +19,18 @@ class SymbolInfographics:
     نماد کے لیے جامع انفوگرافکس بنانے کا نظام
     شامل ہے: چارٹ، تجزیات، شماریات، اور بصری اجزاء
     """
+
+    @staticmethod
+    def _buffer_to_base64(buf: io.BytesIO) -> str:
+        """Convert buffer to base64 encoded string"""
+        try:
+            import base64
+            buf.seek(0)
+            img_str = base64.b64encode(buf.getvalue()).decode('utf-8')
+            return f"data:image/png;base64,{img_str}"
+        except Exception as e:
+            logger.error(f"Buffer to base64 conversion failed: {e}")
+            return ""
 
     @staticmethod
     def generate_symbol_infographics(symbol: str, data: List[Dict], period: str = "1Y") -> Dict:
@@ -467,7 +480,7 @@ class SymbolInfographics:
 
             # Create heatmap
             sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0,
-                       square=True, linewidths=0.5, ax=ax)
+                       square=True, linewidths=1, ax=ax)
 
             ax.set_title(f'{symbol} - Correlation Matrix', fontsize=14, fontweight='bold')
 
@@ -529,11 +542,17 @@ class SymbolInfographics:
     def _generate_seasonal_analysis(df: pd.DataFrame, symbol: str) -> Optional[str]:
         """Generate seasonal analysis chart"""
         try:
-            if not hasattr(df.index, 'month') or len(df) < 30:
+            if len(df) < 30:
                 return None
 
-            # Group by month
-            monthly_returns = df.groupby(df.index.month)['close'].agg(['first', 'last'])
+            # Group by month - type: ignore[attr-defined]
+            try:
+                df_index_months = pd.to_datetime(df.index).month  # type: ignore[operator]
+                df_with_month = df.copy()
+                df_with_month['_month'] = df_index_months
+                monthly_returns = df_with_month.groupby('_month')['close'].agg(['first', 'last'])
+            except Exception:
+                return None
             monthly_returns['return'] = (monthly_returns['last'] - monthly_returns['first']) / monthly_returns['first'] * 100
 
             fig, ax = plt.subplots(figsize=(12, 6))
@@ -565,13 +584,7 @@ class SymbolInfographics:
         except Exception as e:
             logger.error(f"Seasonal analysis generation failed: {e}")
             return None
-        """Buffer کو base64 string میں تبدیل کریں"""
-        try:
-            buffer.seek(0)
-            image_data = base64.b64encode(buffer.read()).decode('utf-8')
-            return f"data:image/png;base64,{image_data}"
-        except Exception as e:
-            return ""
+
 
     @staticmethod
     def generate_infographics_report(symbol: str, data: List[Dict], period: str = "1Y") -> Dict:
@@ -602,23 +615,31 @@ class SymbolInfographics:
 
         return report
 
+    # Public aliases for profiling compatibility
+    generate_correlation_matrix = _generate_correlation_matrix
+    generate_volatility_analysis = _generate_volatility_analysis
+    generate_seasonal_analysis = _generate_seasonal_analysis
+
     @staticmethod
-    def _calculate_momentum(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    def _calculate_momentum(prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate momentum indicator"""
         try:
-            return (df['close'] - df['close'].shift(period)) / df['close'].shift(period) * 100
+            return (prices - prices.shift(period)) / prices.shift(period) * 100
         except Exception:
             return pd.Series()
 
     @staticmethod
-    def _detect_support_resistance(df: pd.DataFrame, window: int = 20) -> Tuple[float, float]:
+    def _detect_support_resistance(df: pd.DataFrame, window: int = 20) -> Tuple[List[float], List[float]]:
         """Detect support and resistance levels"""
         try:
             recent_high = df['high'].tail(window).max()
             recent_low = df['low'].tail(window).min()
-            return recent_low, recent_high
+            return [recent_low], [recent_high]
         except Exception:
-            return 0.0, 0.0
+            return [0.0], [0.0]
+
+    # Alias for backward compatibility
+    _find_support_resistance = _detect_support_resistance
 
     @staticmethod
     def _enhanced_technical_analysis(df: pd.DataFrame) -> Dict:
@@ -628,7 +649,7 @@ class SymbolInfographics:
 
             # Add momentum analysis
             if len(df) > 14:
-                momentum = SymbolInfographics._calculate_momentum(df)
+                momentum = SymbolInfographics._calculate_momentum(df['close'])
                 current_momentum = momentum.iloc[-1] if not momentum.empty else 0
 
                 if current_momentum > 5:
@@ -641,8 +662,10 @@ class SymbolInfographics:
                     analysis['momentum'] = "قوی منفی"
 
             # Add support/resistance levels
-            support, resistance = SymbolInfographics._detect_support_resistance(df)
+            support_list, resistance_list = SymbolInfographics._detect_support_resistance(df)  # type: ignore[assignment]
             current_price = df['close'].iloc[-1]
+            support: float = support_list[0] if support_list else 0.0  # type: ignore[assignment]
+            resistance: float = resistance_list[0] if resistance_list else 0.0  # type: ignore[assignment]
 
             analysis['support_level'] = CoreUtils.format_number(support, 'تومان', persian_digits=True)
             analysis['resistance_level'] = CoreUtils.format_number(resistance, 'تومان', persian_digits=True)
