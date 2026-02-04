@@ -9,39 +9,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Import validators safely (avoid circular import)
-try:
-    from app.utils.validators import DataValidator
-except ImportError:
-    # Fallback - define basic validator
-    class DataValidator:
-        @staticmethod
-        def is_valid_symbol(s):
-            return s and isinstance(s, str) and len(s) > 0
-        @staticmethod
-        def is_valid_date(d):
-            try:
-                datetime.strptime(d, "%Y-%m-%d")
-                return True
-            except:
-                return False
-        @staticmethod
-        def is_valid_price(p):
-            try:
-                float(p)
-                return True
-            except:
-                return False
-        @staticmethod
-        def is_valid_volume(v):
-            try:
-                int(v)
-                return True
-            except:
-                return False
-        @staticmethod
-        def ensure_non_empty_list(lst):
-            return lst if lst and isinstance(lst, list) else []
+# Import validators (the module exists, so direct import is safe)
+from app.utils.validators import DataValidator
 
 class SymbolDatabase:
     """
@@ -68,6 +37,7 @@ class SymbolDatabase:
         self._cache_lock = threading.RLock()
         
         self._init_db()
+        self._init_test_tables()
 
     def _get_connection(self):
         """Thread-safe connection retrieval"""
@@ -226,7 +196,39 @@ class SymbolDatabase:
         except Exception as e:
             logger.error(f"Schema migration failed: {e}")
             raise
-    
+
+    def _init_test_tables(self):
+        """Build tables for web-based test runner and scheduler"""
+        with self._db_lock:
+            try:
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS test_results (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            test_suite TEXT,
+                            status TEXT,
+                            start_time TIMESTAMP,
+                            end_time TIMESTAMP,
+                            logs TEXT,
+                            exit_code INTEGER,
+                            ai_analysis TEXT
+                        )
+                    ''')
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS test_schedules (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            test_name TEXT,
+                            cron_pattern TEXT,
+                            is_active INTEGER DEFAULT 1,
+                            last_run TIMESTAMP,
+                            next_run TIMESTAMP
+                        )
+                    ''')
+                    conn.commit()
+            except Exception as e:
+                logger.error(f"Test tables initialization failed: {e}")
+
     def cleanup_old_data(self, days=365):
         """
         پرانے ڈیٹا کو صاف کریں تاکہ DB سائز کنٹرول میں رہے
