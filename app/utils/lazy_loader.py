@@ -33,7 +33,7 @@ class LazyLoader:
         self._cache = {}
         self._initialized = True
     
-    def register(self, name: str, import_path: str, attr: str = None):
+    def register(self, name: str, import_path: str, attr: str | None = None):
         """
         Register a module to be lazily loaded.
         
