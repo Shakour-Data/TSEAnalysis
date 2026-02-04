@@ -17,9 +17,13 @@ from app.services.tsetmc import client
 from app.services.tgju import tgju_client
 from app.services.technical_analysis import TechnicalAnalyzer
 from app.services.local_ai_assistant import ai_assistant
+from app.services.enhanced_ai import enhanced_ai, EnhancedAIAssistant
+from app.services.technical_analysis_enhanced import TechnicalAnalyzer as EnhancedTechnicalAnalyzer
+from app.services.autonomous_ai import content_generator, continuous_learning
 from app.database import db
 from app.utils.core_utils import PROXY_URL, stats
 from app import cache
+from app.utils.circuit_breaker import get_circuit_status, circuit_breaker, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
 main_bp = Blueprint('main', __name__)
@@ -130,15 +134,57 @@ def get_market_overview():
 
 @main_bp.route('/api/health')
 def health_check():
-    """Diagnostic endpoint to check connectivity status."""
-    test_res = client._make_request("Api/Tsetmc/Index.php", {"type": "1"})
-    status = "OK" if test_res and isinstance(test_res, dict) and "error" not in test_res else "FAILED"
-    return jsonify({
-        "status": status,
-        "proxy": PROXY_URL,
-        "active_client": client.client_name,
-        "test_response": str(test_res)[:200] if test_res else "None"
-    })
+    """Diagnostic endpoint to check connectivity status with circuit breaker info."""
+    try:
+        # Check circuit breaker status
+        circuit_status = get_circuit_status()
+        
+        # Safe request test with circuit breaker protection
+        test_res = None
+        try:
+            from app.utils.circuit_breaker import TSETMC_CIRCUIT, get_circuit_breaker
+            cb = get_circuit_breaker(TSETMC_CIRCUIT)
+            if cb.allow_request():
+                test_res = client._make_request("Api/Tsetmc/Index.php", {"type": "1"})
+        except Exception as e:
+            logger.warning(f"Health check API call failed: {e}")
+        
+        # Determine status safely
+        status = "OK"
+        if test_res is None:
+            status = "WARNING"
+        elif isinstance(test_res, dict) and "error" in test_res:
+            status = "FAILED"
+        elif not isinstance(test_res, (dict, list)):
+            status = "WARNING"
+        
+        return jsonify({
+            "status": status,
+            "proxy": PROXY_URL,
+            "active_client": client.client_name,
+            "circuit_breakers": circuit_status,
+            "test_response": str(test_res)[:200] if test_res else "None"
+        })
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return jsonify({
+            "status": "ERROR",
+            "error": str(e),
+            "proxy": PROXY_URL
+        }), 500
+
+
+@main_bp.route('/api/circuit-status')
+def circuit_status():
+    """Get circuit breaker status for all services."""
+    try:
+        return jsonify({
+            "status": "success",
+            "circuits": get_circuit_status()
+        })
+    except Exception as e:
+        logger.error(f"Circuit status error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @main_bp.route('/api/symbols/<market_type>')
 def get_symbols(market_type):
@@ -700,4 +746,582 @@ def ai_status():
         }
         return jsonify(status)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============ Enhanced AI Endpoints ============
+
+@main_bp.route('/api/ai/enhanced/analyze/<symbol>', methods=['GET'])
+def enhanced_ai_analyze(symbol):
+    """Enhanced AI-powered technical analysis with 20+ features."""
+    try:
+        # Get price history
+        history = client.get_price_history(symbol, adjusted=True)
+        if not history or len(history) < 50:
+            return jsonify({"error": f"داده کافی برای نماد {symbol} یافت نشد"}), 404
+        
+        # Run enhanced analysis
+        result = enhanced_ai.analyze_symbol(symbol, history)
+        
+        if result:
+            return jsonify(result.to_dict())
+        else:
+            return jsonify({"error": "خطا در تحلیل"}), 500
+            
+    except Exception as e:
+        logger.error(f"Enhanced AI analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/enhanced/report/<symbol>', methods=['GET'])
+def enhanced_ai_report(symbol):
+    """Generate comprehensive markdown report."""
+    try:
+        # Get price history
+        history = client.get_price_history(symbol, adjusted=True)
+        if not history or len(history) < 50:
+            return jsonify({"error": f"داده کافی برای نماد {symbol} یافت نشد"}), 404
+        
+        # Run enhanced analysis
+        result = enhanced_ai.analyze_symbol(symbol, history)
+        
+        if result:
+            # Generate markdown report
+            report = enhanced_ai.generate_report(result)
+            return jsonify({
+                "symbol": symbol,
+                "report": report,
+                "analysis": result.to_dict()
+            })
+        else:
+            return jsonify({"error": "خطا در تولید گزارش"}), 500
+            
+    except Exception as e:
+        logger.error(f"Enhanced AI report error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/enhanced/status', methods=['GET'])
+def enhanced_ai_status():
+    """Get enhanced AI model status."""
+    try:
+        status = {
+            "model_loaded": enhanced_ai.model_loaded,
+            "model_exists": enhanced_ai.model is not None,
+            "accuracy": enhanced_ai.accuracy,
+            "last_update": enhanced_ai.last_update.isoformat(),
+            "feature_count": len(enhanced_ai.feature_names),
+            "feature_names": enhanced_ai.feature_names,
+            "ensemble_models": list(enhanced_ai.ensemble_models.keys())
+        }
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/advanced/indicators/<symbol>', methods=['GET'])
+def advanced_indicators(symbol):
+    """Get advanced technical indicators for a symbol."""
+    try:
+        # Get price history
+        history = client.get_price_history(symbol, adjusted=True)
+        if not history:
+            return jsonify({"error": "داده‌ای یافت نشد"}), 404
+        
+        # Prepare data
+        df = EnhancedTechnicalAnalyzer.prepare_ohlcv_data(history)
+        if df.empty:
+            return jsonify({"error": "خطا در پردازش داده"}), 500
+        
+        close = df['close']
+        
+        # Calculate all indicators
+        indicators = {
+            "symbol": symbol,
+            "sma": {
+                "sma_20": float(EnhancedTechnicalAnalyzer.calculate_sma(close, 20).iloc[-1]),
+                "sma_50": float(EnhancedTechnicalAnalyzer.calculate_sma(close, 50).iloc[-1]),
+                "sma_200": float(EnhancedTechnicalAnalyzer.calculate_sma(close, 200).iloc[-1])
+            },
+            "ema": {
+                "ema_12": float(EnhancedTechnicalAnalyzer.calculate_ema(close, 12).iloc[-1]),
+                "ema_26": float(EnhancedTechnicalAnalyzer.calculate_ema(close, 26).iloc[-1])
+            },
+            "rsi": float(EnhancedTechnicalAnalyzer.calculate_rsi(close).iloc[-1]),
+        }
+        
+        macd, signal, hist = EnhancedTechnicalAnalyzer.calculate_macd(close)
+        indicators["macd"] = {
+            "macd": float(macd.iloc[-1]),
+            "signal": float(signal.iloc[-1]),
+            "histogram": float(hist.iloc[-1])
+        }
+        
+        upper, middle, lower = EnhancedTechnicalAnalyzer.calculate_bollinger_bands(close)
+        indicators["bollinger_bands"] = {
+            "upper": float(upper.iloc[-1]),
+            "middle": float(middle.iloc[-1]),
+            "lower": float(lower.iloc[-1])
+        }
+        
+        # ADX and ATR require high/low data
+        if 'high' in df.columns and 'low' in df.columns:
+            indicators["atr"] = float(EnhancedTechnicalAnalyzer.calculate_atr(df).iloc[-1])
+            indicators["adx"] = float(EnhancedTechnicalAnalyzer.calculate_adx(df).iloc[-1])
+        
+        indicators["obv"] = float(EnhancedTechnicalAnalyzer.calculate_obv(df).iloc[-1])
+        
+        # Generate signals
+        signals = EnhancedTechnicalAnalyzer.generate_signals(df)
+        indicators["signals"] = signals
+        
+        # Support/Resistance
+        sr_levels = EnhancedTechnicalAnalyzer.find_support_resistance(df)
+        indicators["support_resistance"] = sr_levels
+        
+        # Candlestick patterns
+        patterns = EnhancedTechnicalAnalyzer.detect_candlestick_patterns(df)
+        indicators["patterns"] = patterns
+        
+        return jsonify(indicators)
+        
+    except Exception as e:
+        logger.error(f"Advanced indicators error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ============ Autonomous AI Content Generation Endpoints ============
+
+@main_bp.route('/api/ai/content/generate/analysis', methods=['POST'])
+def generate_analysis_content():
+    """Generate autonomous AI analysis content."""
+    try:
+        data = request.json
+        
+        symbol = data.get('symbol')
+        trend = data.get('trend', 'neutral')
+        indicators = data.get('indicators', {})
+        supports = data.get('supports', [])
+        resistances = data.get('resistances', [])
+        recommendation = data.get('recommendation', 'نگهداری')
+        analysis_text = data.get('analysis_text', '')
+        
+        if not symbol:
+            return jsonify({"error": "نماد الزامی است"}), 400
+        
+        # Generate content
+        content = content_generator.generate_analysis(
+            symbol=symbol,
+            trend=trend,
+            indicators=indicators,
+            supports=supports,
+            resistances=resistances,
+            recommendation=recommendation,
+            analysis_text=analysis_text
+        )
+        
+        return jsonify({
+            "content_id": content.content_id,
+            "title": content.title,
+            "body": content.body,
+            "keywords": content.keywords,
+            "generated_at": content.generated_at.isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Content generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/content/generate/summary', methods=['POST'])
+def generate_summary_content():
+    """Generate market summary content."""
+    try:
+        data = request.json or {}
+        
+        stats = {
+            'total_symbols': data.get('total_symbols', db.get_total_symbols_count()),
+            'bullish_count': data.get('bullish_count', 0),
+            'bearish_count': data.get('bearish_count', 0),
+            'neutral_count': data.get('neutral_count', 0),
+            'top_gainers': data.get('top_gainers', ''),
+            'top_losers': data.get('top_losers', '')
+        }
+        
+        content = content_generator.generate_market_summary(stats)
+        
+        return jsonify({
+            "content_id": content.content_id,
+            "title": content.title,
+            "body": content.body,
+            "keywords": content.keywords,
+            "generated_at": content.generated_at.isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Summary generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/content/generate/educational', methods=['POST'])
+def generate_educational_content():
+    """Generate educational content."""
+    try:
+        data = request.json
+        
+        title = data.get('title')
+        topic = data.get('topic')
+        content_text = data.get('content')
+        
+        if not title or not content_text:
+            return jsonify({"error": "عنوان و محتوا الزامی هستند"}), 400
+        
+        content = content_generator.generate_educational(
+            title=title,
+            topic=topic or title,
+            content=content_text
+        )
+        
+        return jsonify({
+            "content_id": content.content_id,
+            "title": content.title,
+            "body": content.body,
+            "keywords": content.keywords,
+            "generated_at": content.generated_at.isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Educational content error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/content/feedback', methods=['POST'])
+def submit_content_feedback():
+    """Submit feedback for content to improve learning."""
+    try:
+        data = request.json
+        
+        content_id = data.get('content_id')
+        content_type = data.get('content_type')
+        rating = data.get('rating', 0)
+        was_helpful = data.get('was_helpful', False)
+        comment = data.get('comment')
+        
+        if not content_id or not content_type:
+            return jsonify({"error": "شناسه و نوع محتوا الزامی هستند"}), 400
+        
+        # Record feedback
+        continuous_learning.record_feedback(
+            content_id=content_id,
+            content_type=content_type,
+            rating=rating,
+            was_helpful=was_helpful,
+            user_comment=comment
+        )
+        
+        # Rate content in generator
+        content_generator.rate_content(content_id, rating, was_helpful)
+        
+        return jsonify({"message": "بازخورد شما ثبت شد. متشکریم!"})
+        
+    except Exception as e:
+        logger.error(f"Feedback error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/content/popular', methods=['GET'])
+def get_popular_content():
+    """Get most popular content."""
+    try:
+        content_type = request.args.get('type')
+        limit = int(request.args.get('limit', 10))
+        
+        # Parse content type
+        ct = None
+        if content_type:
+            from app.services.autonomous_ai import ContentType
+            try:
+                ct = ContentType(content_type)
+            except ValueError:
+                pass
+        
+        contents = content_generator.get_popular_content(content_type=ct, limit=limit)
+        
+        return jsonify({
+            "contents": [
+                {
+                    "content_id": c.content_id,
+                    "title": c.title,
+                    "type": c.content_type.value,
+                    "view_count": c.view_count,
+                    "rating": c.rating
+                }
+                for c in contents
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Popular content error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/content/best', methods=['GET'])
+def get_best_rated_content():
+    """Get highest rated content."""
+    try:
+        content_type = request.args.get('type')
+        limit = int(request.args.get('limit', 10))
+        
+        ct = None
+        if content_type:
+            from app.services.autonomous_ai import ContentType
+            try:
+                ct = ContentType(content_type)
+            except ValueError:
+                pass
+        
+        contents = content_generator.get_best_rated_content(content_type=ct, limit=limit)
+        
+        return jsonify({
+            "contents": [
+                {
+                    "content_id": c.content_id,
+                    "title": c.title,
+                    "type": c.content_type.value,
+                    "rating": c.rating,
+                    "body": c.body[:500] + "..." if len(c.body) > 500 else c.body
+                }
+                for c in contents
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Best content error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/ai/learning/stats', methods=['GET'])
+def get_learning_stats():
+    """Get continuous learning statistics."""
+    try:
+        stats = continuous_learning.get_learning_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Learning stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/nlp/analyze', methods=['POST'])
+def nlp_analyze():
+    """NLP text analysis endpoint."""
+    from app.services.autonomous_ai import PersianNLP
+    
+    try:
+        data = request.json
+        text = data.get('text', '')
+        
+        if not text:
+            return jsonify({"error": "متن الزامی است"}), 400
+        
+        nlp = PersianNLP()
+        
+        # Normalize
+        normalized = nlp.normalize(text)
+        
+        # Sentiment
+        sentiment = nlp.analyze_sentiment(text)
+        
+        # Keywords
+        keywords = nlp.extract_keywords(text)
+        
+        # Summary
+        summary = nlp.generate_summary(text)
+        
+        return jsonify({
+            "original": text,
+            "normalized": normalized,
+            "sentiment": sentiment,
+            "keywords": keywords,
+            "summary": summary
+        })
+        
+    except Exception as e:
+        logger.error(f"NLP analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ==================== Training Data API ====================
+
+@main_bp.route('/api/training/build', methods=['POST'])
+def build_knowledge_base():
+    """Build knowledge base from documents."""
+    from app.services.training_data_extractor import TrainingDataExtractor
+    
+    try:
+        data = request.json or {}
+        docs_dir = data.get('docs_dir', 'docs')
+        
+        extractor = TrainingDataExtractor(docs_dir=docs_dir)
+        result = extractor.build_knowledge_base()
+        
+        return jsonify({
+            "success": True,
+            "result": result,
+            "message": f"Built knowledge base with {result.get('total_chunks', 0)} chunks"
+        })
+        
+    except Exception as e:
+        logger.error(f"Knowledge base build error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/status', methods=['GET'])
+def get_extraction_status():
+    """Get training data extraction status."""
+    from app.services.training_data_extractor import TrainingDataExtractor
+    
+    try:
+        extractor = TrainingDataExtractor()
+        status = extractor.get_status()
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Extraction status error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/search', methods=['POST'])
+def search_knowledge_base():
+    """Search knowledge base."""
+    from app.services.autonomous_ai import KnowledgeBase
+    
+    try:
+        data = request.json
+        query = data.get('query', '')
+        top_k = data.get('top_k', 3)
+        
+        if not query:
+            return jsonify({"error": "Query الزامی است"}), 400
+        
+        kb = KnowledgeBase()
+        results = kb.search(query, top_k)
+        
+        return jsonify({
+            "query": query,
+            "results": results,
+            "count": len(results)
+        })
+        
+    except Exception as e:
+        logger.error(f"Knowledge search error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/stats', methods=['GET'])
+def get_knowledge_stats():
+    """Get knowledge base statistics."""
+    from app.services.autonomous_ai import KnowledgeBase
+    
+    try:
+        kb = KnowledgeBase()
+        stats = kb.get_stats()
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Knowledge stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/sources', methods=['GET'])
+def list_training_sources():
+    """List available training data sources."""
+    from app.services.training_data_extractor import TrainingDataExtractor
+    
+    try:
+        extractor = TrainingDataExtractor()
+        sources = extractor.list_sources()
+        
+        return jsonify({
+            "sources": sources,
+            "total": len(sources)
+        })
+        
+    except Exception as e:
+        logger.error(f"Sources list error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/extract/pdf', methods=['POST'])
+def extract_from_pdf():
+    """Extract text from a PDF file."""
+    from app.services.training_data_extractor import TrainingDataExtractor
+    
+    try:
+        data = request.json
+        pdf_path = data.get('pdf_path', '')
+        
+        if not pdf_path:
+            return jsonify({"error": "PDF path الزامی است"}), 400
+        
+        extractor = TrainingDataExtractor()
+        result = extractor.extract_from_pdf(pdf_path)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"PDF extraction error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/training/scrape', methods=['POST'])
+def scrape_educational_content():
+    """Scrape educational content from websites."""
+    from app.services.training_data_extractor import WebScraper
+    
+    try:
+        data = request.json
+        urls = data.get('urls', [])
+        
+        if not urls:
+            return jsonify({"error": "URLs الزامی است"}), 400
+        
+        scraper = WebScraper()
+        results = []
+        
+        for url in urls:
+            try:
+                content = scraper.scrape_article(url)
+                results.append({"url": url, "content": content})
+            except Exception as url_e:
+                results.append({"url": url, "error": str(url_e)})
+        
+        return jsonify({
+            "results": results,
+            "success_count": sum(1 for r in results if 'content' in r)
+        })
+        
+    except Exception as e:
+        logger.error(f"Web scraping error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/nlp/format/number', methods=['POST'])
+def nlp_format_number():
+    """Format number in Persian style."""
+    from app.services.autonomous_ai import PersianNLP
+    
+    try:
+        data = request.json
+        number = float(data.get('number', 0))
+        currency = data.get('currency', True)
+        
+        nlp = PersianNLP()
+        formatted = nlp.format_number(number, currency=currency)
+        
+        return jsonify({"formatted": formatted})
+        
+    except Exception as e:
+        logger.error(f"Number formatting error: {e}")
         return jsonify({"error": str(e)}), 500

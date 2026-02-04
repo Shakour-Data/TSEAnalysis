@@ -36,13 +36,22 @@ def create_app():
                 template_folder='../templates', 
                 static_folder='../static')
     
-    # Configure CORS - Allow cross-origin requests from all sources with credentials
-    # In production, restrict to specific domains
+    # Configure CORS - Production-ready security settings
+    # Environment variable 'ALLOWED_ORIGINS' = comma-separated list of allowed domains
+    # Default: Only allow same origin for production
     if CORS_AVAILABLE:
+        # Get allowed origins from environment or use secure defaults
+        allowed_origins = os.getenv('ALLOWED_ORIGINS', '')
+        if allowed_origins:
+            origins = [o.strip() for o in allowed_origins.split(',')]
+        else:
+            # Default: empty list (same-origin only) unless in debug mode
+            origins = ['*'] if os.getenv('DEBUG', 'false').lower() == 'true' else []
+        
         CORS(app, 
              resources={
                  r"/api/*": {
-                     "origins": ["*"],  # آپ یہ خاص domains سے بدل سکتے ہیں
+                     "origins": origins,
                      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                      "allow_headers": ["Content-Type", "Authorization"],
                      "expose_headers": ["Content-Type", "X-Total-Count"],
@@ -52,7 +61,11 @@ def create_app():
              },
              supports_credentials=True
         )
-        logger.info("✅ CORS configured")
+        
+        if origins:
+            logger.info(f"✅ CORS configured with allowed origins: {origins}")
+        else:
+            logger.info("✅ CORS configured for same-origin only (production mode)")
     else:
         logger.warning("⚠️ Flask-CORS not available")
     
@@ -146,38 +159,50 @@ def create_app():
     # Preload logic - Run once in a thread
     def start_preload():
         if app.testing: return # Don't preload in tests
-        from app.services.tsetmc import client
-        from app.services.data_refresh import start_background_service
-        from app.services.incremental_updater import start_updater
         
         def background_preload():
-            # Wait a few seconds for app to fully start
+            # Wait for app to fully start
             time.sleep(5)
             
-            # Start continuous data refresh service
+            # Preload critical modules with lazy loading
             try:
+                from app.utils.lazy_loader import preload_critical_modules
+                preload_critical_modules()
+                logger.info("✅ Critical modules preloaded")
+            except Exception as e:
+                logger.warning(f"Could not preload modules: {e}")
+            
+            # Start services
+            try:
+                from app.services.data_refresh import start_background_service
                 start_background_service()
                 logger.info("✅ Background data refresh service started")
             except Exception as e:
                 logger.warning(f"Could not start data refresh service: {e}")
             
-            # Start incremental database updater
             try:
-                symbols_per_day = 100  # آپدیت 100 نماد در روز
+                from app.services.incremental_updater import start_updater
+                symbols_per_day = 100
                 updater = start_updater(symbols_per_day=symbols_per_day)
                 logger.info(f"✅ Incremental database updater started ({symbols_per_day} symbols/day)")
             except Exception as e:
                 logger.warning(f"Could not start database updater: {e}")
             
-            if db.get_total_symbols_count() < 100:
-                logger.info("🚀 STARTUP: Registry empty. Initiating background pre-warm...")
-                for t in ["1", "2"]:
-                    try:
-                        logger.debug(f"Preloading symbol type {t}...")
-                        client.get_all_symbols(t)
-                        time.sleep(random.uniform(15, 25))
-                    except Exception as e:
-                        logger.error(f"Failed to preload type {t}: {str(e)}")
+            # Pre-warm registry if needed
+            try:
+                from app.database import db
+                from app.services.tsetmc import client
+                if db.get_total_symbols_count() < 100:
+                    logger.info("🚀 STARTUP: Registry empty. Initiating background pre-warm...")
+                    for t in ["1", "2"]:
+                        try:
+                            logger.debug(f"Preloading symbol type {t}...")
+                            client.get_all_symbols(t)
+                            time.sleep(random.uniform(15, 25))
+                        except Exception as e:
+                            logger.error(f"Failed to preload type {t}: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Could not pre-warm registry: {e}")
         
         thread = threading.Thread(target=background_preload, daemon=True)
         thread.name = "BackgroundPreloadThread"
