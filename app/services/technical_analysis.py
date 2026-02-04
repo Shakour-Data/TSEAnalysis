@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import ta
+import ta  # type: ignore[attr-defined]
 import mplfinance as mpf
 import matplotlib
 matplotlib.use('Agg')
@@ -54,7 +54,8 @@ class TechnicalAnalyzer:
             z_scores = np.abs((valid_df[column] - mean) / std)
             
             # Find outliers
-            outlier_indices = z_scores[z_scores > threshold].index.tolist()
+            outlier_mask = np.array(z_scores) > threshold
+            outlier_indices = valid_df[outlier_mask].index.tolist()
             
             if outlier_indices:
                 logger.warning(f"تشخیص {len(outlier_indices)} داده پرت در {column}")
@@ -298,10 +299,10 @@ class TechnicalAnalyzer:
                 if col not in logic:
                     logic[col] = 'first'
                     
-            weekly_df = df.resample('W-WED').apply(logic)
+            weekly_df = df.resample('W-WED').apply(logic)  # type: ignore[arg-type]
             weekly_df = weekly_df.dropna(subset=['close'])
             weekly_df.reset_index(inplace=True)
-            weekly_df['date'] = weekly_df[date_col].dt.strftime('%Y-%m-%d')
+            weekly_df['date'] = weekly_df[date_col].dt.strftime('%Y-%m-%d')  # type: ignore[attr-defined]
             weekly_df = weekly_df.sort_values('date', ascending=False)
             
             return weekly_df.to_dict('records')
@@ -467,31 +468,31 @@ class TechnicalAnalyzer:
         try:
             # Trend & Momentum
             if len(df) >= 20:
-                df['SMA20'] = ta.trend.sma_indicator(df['close'], window=20)
-                df['BBU'] = ta.volatility.bollinger_hband(df['close'], window=20)
-                df['BBL'] = ta.volatility.bollinger_lband(df['close'], window=20)
+                df['SMA20'] = ta.trend.sma_indicator(df['close'], window=20)  # type: ignore[attr-defined]
+                df['BBU'] = ta.volatility.bollinger_hband(df['close'], window=20)  # type: ignore[attr-defined]
+                df['BBL'] = ta.volatility.bollinger_lband(df['close'], window=20)  # type: ignore[attr-defined]
             else:
                 df['SMA20'] = df['close'].rolling(window=min(len(df), 5)).mean()
                 df['BBU'] = None
                 df['BBL'] = None
 
             if len(df) >= 50:
-                df['SMA50'] = ta.trend.sma_indicator(df['close'], window=50)
+                df['SMA50'] = ta.trend.sma_indicator(df['close'], window=50)  # type: ignore[attr-defined]
             else:
                 df['SMA50'] = None
 
             if len(df) >= 26:
-                df['MACD'] = ta.trend.macd(df['close'])
-                df['MACD_Sig'] = ta.trend.macd_signal(df['close'])
+                df['MACD'] = ta.trend.macd(df['close'])  # type: ignore[attr-defined]
+                df['MACD_Sig'] = ta.trend.macd_signal(df['close'])  # type: ignore[attr-defined]
             else:
                 df['MACD'] = None
                 df['MACD_Sig'] = None
 
             if len(df) >= 14:
-                df['RSI'] = ta.momentum.rsi(df['close'], window=14)
-                df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])
-                df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
-                df['STOCHk'] = ta.momentum.stoch(df['high'], df['low'], df['close'], window=14, smooth_window=3)
+                df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # type: ignore[attr-defined]
+                df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])  # type: ignore[attr-defined]
+                df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)  # type: ignore[attr-defined]
+                df['STOCHk'] = ta.momentum.stoch(df['high'], df['low'], df['close'], window=14, smooth_window=3)  # type: ignore[attr-defined]
             else:
                 df['RSI'] = None
                 df['ADX'] = None
@@ -500,10 +501,10 @@ class TechnicalAnalyzer:
 
             # Ichimoku
             if len(df) >= 52:
-                df['Ichimoku_A'] = ta.trend.ichimoku_a(df['high'], df['low'])
-                df['Ichimoku_B'] = ta.trend.ichimoku_b(df['high'], df['low'])
-                df['Ichimoku_Base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])
-                df['Ichimoku_Conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])
+                df['Ichimoku_A'] = ta.trend.ichimoku_a(df['high'], df['low'])  # type: ignore[attr-defined]
+                df['Ichimoku_B'] = ta.trend.ichimoku_b(df['high'], df['low'])  # type: ignore[attr-defined]
+                df['Ichimoku_Base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])  # type: ignore[attr-defined]
+                df['Ichimoku_Conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])  # type: ignore[attr-defined]
             else:
                 df['Ichimoku_A'] = None
                 df['Ichimoku_B'] = None
@@ -530,8 +531,8 @@ class TechnicalAnalyzer:
                             merged = merged.dropna()
                             cov = merged['ret_s'].cov(merged['ret_i'])
                             var = merged['ret_i'].var()
-                            if var != 0:
-                                beta_val = round(cov / var, 2)
+                            if var != 0 and isinstance(var, (int, float)) and isinstance(cov, (int, float)):
+                                beta_val = round(float(cov) / float(var), 2)
                 except Exception as e:
                     logger.debug(f"Beta calculation error: {e}")
                     pass
@@ -618,110 +619,6 @@ class TechnicalAnalyzer:
         except Exception as e:
             logger.error(f"Error: {e}")
             return data
-
-    @classmethod
-    def generate_chart_image(cls, data, symbol_name, timeframe='daily'):
-        try:
-            if not data: return None
-            df = pd.DataFrame(data)
-            if df.empty: return None
-            
-            df_plot = df.copy()
-            if 'date' in df_plot.columns:
-                df_plot['date'] = pd.to_datetime(df_plot['date'])
-                df_plot.set_index('date', inplace=True)
-            
-            # Use last 100 points for plot if not already limited
-            if len(df_plot) > 100:
-                df_plot = df_plot.sort_index().tail(100)
-            else:
-                df_plot = df_plot.sort_index()
-            
-            for c in ['open', 'high', 'low', 'close', 'volume']:
-                if c in df_plot.columns:
-                    df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-
-            supports, resistances = cls.get_support_resistance(df)
-            
-            hlines, colors, hlabels = [], [], []
-            for s in supports[:3]:
-                hlines.append(s['value']); colors.append('g'); hlabels.append(f"S:{s['strength']}")
-            for r in resistances[:3]:
-                hlines.append(r['value']); colors.append('r'); hlabels.append(f"R:{r['strength']}")
-
-            apds = []
-            if 'Ichimoku_A' in df_plot.columns and 'Ichimoku_B' in df_plot.columns:
-                apds.append(mpf.make_addplot(df_plot['Ichimoku_A'], color='green', width=0.5, alpha=0.3))
-                apds.append(mpf.make_addplot(df_plot['Ichimoku_B'], color='red', width=0.5, alpha=0.3))
-
-            if 'RSI' in df_plot.columns:
-                apds.append(mpf.make_addplot(df_plot['RSI'], panel=1, color='purple', ylabel='RSI', ylim=(0, 100)))
-            
-            if 'MACD' in df_plot.columns and 'MACD_Sig' in df_plot.columns:
-                macd_hist = df_plot['MACD'] - df_plot['MACD_Sig']
-                apds.append(mpf.make_addplot(df_plot['MACD'], panel=2, color='orange', ylabel='MACD'))
-                apds.append(mpf.make_addplot(df_plot['MACD_Sig'], panel=2, color='blue'))
-                apds.append(mpf.make_addplot(macd_hist, type='bar', panel=2, color='gray', alpha=0.3))
-
-            buf = io.BytesIO()
-            mc = mpf.make_marketcolors(up='g', down='r', inherit=True)
-            s = mpf.make_mpf_style(marketcolors=mc, gridstyle=':', y_on_right=False)
-            
-            timeframe_label = "Weekly" if timeframe == 'weekly' else "Daily"
-            tf_fa = "هفتگی" if timeframe == 'weekly' else "روزانه"
-            
-            # Determine number of panels
-            num_panels = 2 # Basic price + volume
-            for ap in apds:
-                if 'panel' in ap and ap['panel'] >= num_panels:
-                    num_panels = ap['panel'] + 1
-            
-            p_ratios = (6, 2, 2, 2)[:num_panels]
-
-            # Create subplots for better control
-            fig, axes = mpf.plot(df_plot, type='candle', style=s, volume=True, 
-                                 addplot=apds,
-                                 hlines=dict(hlines=hlines, colors=colors, linestyle='-.', alpha=0.4),
-                                 title=f"Technical Analysis ({tf_fa}): {symbol_name}",
-                                 ylabel='Price', ylabel_lower='Volume',
-                                 returnfig=True, figsize=(15, 12),
-                                 panel_ratios=p_ratios) # Corrected panel ratios
-
-            # Shamsi date conversion for X-axis
-            def to_jalali(x, pos):
-                try:
-                    # Check if x is within bounds of the dataframe index
-                    idx = int(round(x))
-                    if 0 <= idx < len(df_plot):
-                        dt = df_plot.index[idx]
-                        j_dt = jdatetime.date.fromgregorian(date=dt.date())
-                        return j_dt.strftime('%y/%m/%d')
-                    return ""
-                except Exception as e:
-                    return ""
-
-            # Apply Jalali formatter to the price axis
-            for ax in axes:
-                # In mplfinance, usually the last axis with labels is the one we want
-                # or we can check if it has a major formatter that we can override
-                ax.xaxis.set_major_formatter(plt.FuncFormatter(to_jalali))
-            
-            # Adjust date label spacing
-            fig.autofmt_xdate()
-            
-            ax_price = axes[0]
-            for val, label, color in zip(hlines, hlabels, colors):
-                ax_price.annotate(label, xy=(1, val), xycoords=('axes fraction', 'data'),
-                                 xytext=(10, 0), textcoords='offset points',
-                                 color=color, fontsize=8, fontweight='bold')
-
-            fig.savefig(buf, format='png', bbox_inches='tight', dpi=120)
-            plt.close(fig)
-            buf.seek(0)
-            return buf
-        except Exception as e:
-            logger.error(f"Chart error: {e}")
-            return None
 
     @staticmethod
     def generate_strategy_matrix(current_price, supports, resistances):
