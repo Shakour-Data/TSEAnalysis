@@ -116,6 +116,14 @@ def create_app():
     from app.api.routes import main_bp
     app.register_blueprint(main_bp)
     
+    # Register Optimizer Routes
+    try:
+        from app.api.optimizer_routes import register_optimizer_routes
+        register_optimizer_routes(app)
+        logger.info("✅ Optimizer routes registered successfully")
+    except (ImportError, AttributeError) as e:
+        logger.debug(f"Optimizer routes not available: {e}")
+    
     # Optional: Register update_bp if it exists
     try:
         from app.api.updates_routes import update_bp
