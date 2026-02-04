@@ -80,9 +80,13 @@ def app():
     # Cleanup
     if os.path.exists(test_db_path):
         try:
-            # Close connections before removing
-            if hasattr(db, 'conn') and db.conn:
-                db.conn.close()
+            # Close connections before removing - use getattr with default to avoid error
+            conn_attr = getattr(db, 'conn', None)
+            if conn_attr is not None:
+                try:
+                    conn_attr.close()
+                except Exception:
+                    pass
             os.remove(test_db_path)
         except:
             pass
