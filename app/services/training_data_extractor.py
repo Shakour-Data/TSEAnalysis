@@ -174,6 +174,23 @@ class PDFExtractor:
         
         return text
     
+    def _extract_keywords(self, content: str) -> List[str]:
+        """Extract keywords from content using simple NLP"""
+        import re
+        # Remove special characters and split into words
+        words = re.findall(r'\b[a-zA-Zآ-ی]+\b', content.lower())
+        # Filter common words
+        stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
+                     'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 
+                     'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare', 
+                     'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+                     'from', 'as', 'into', 'through', 'during', 'before', 'after',
+                     'و', 'از', 'به', 'در', 'برای', 'که', 'این', 'است', 'آن'}
+        keywords = [w for w in words if w not in stopwords and len(w) > 2]
+        # Return most common keywords (up to 20)
+        from collections import Counter
+        return [w for w, _ in Counter(keywords).most_common(20)]
+    
     def extract_all(self) -> List[TrainingDocument]:
         """Extract text from all PDFs"""
         documents = []
@@ -830,6 +847,130 @@ class TrainingDataPipeline:
         thread = threading.Thread(target=update_loop, daemon=True)
         thread.start()
         logger.info("Periodic training data update started")
+    
+    def build_knowledge_base(self) -> Dict:
+        """Alias for run_full_pipeline for API compatibility"""
+        return self.run_full_pipeline()
+    
+    def get_status(self) -> Dict:
+        """Get current status of training data pipeline"""
+        try:
+            # Check if knowledge base exists
+            chunks_file = f"{self.knowledge_base.data_dir}/chunks.json"
+            has_chunks = os.path.exists(chunks_file)
+            
+            if has_chunks:
+                with open(chunks_file, 'r', encoding='utf-8') as f:
+                    chunks_data = json.load(f)
+                chunk_count = len(chunks_data)
+                
+                # Get document count
+                extracted_dir = f"{self.knowledge_base.data_dir}/extracted"
+                if os.path.exists(extracted_dir):
+                    doc_count = len([f for f in os.listdir(extracted_dir) if f.endswith('.json')])
+                else:
+                    doc_count = 0
+            else:
+                chunk_count = 0
+                doc_count = 0
+            
+            return {
+                "status": "ready" if has_chunks else "empty",
+                "total_documents": doc_count,
+                "total_chunks": chunk_count,
+                "last_updated": self._get_last_update_time(),
+                "data_directory": self.knowledge_base.data_dir
+            }
+            
+        except Exception as e:
+            logger.error(f"Status check error: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+    
+    def list_sources(self) -> List[Dict]:
+        """List all available document sources"""
+        sources = []
+        
+        # PDF sources
+        pdf_extractor = PDFExtractor(self.docs_dir)
+        pdf_files = pdf_extractor.find_pdfs()
+        for pdf in pdf_files:
+            sources.append({
+                "type": "pdf",
+                "path": pdf,
+                "filename": os.path.basename(pdf)
+            })
+        
+        # Markdown sources
+        md_parser = MarkdownParser(self.docs_dir)
+        md_files = md_parser.find_markdown_files()
+        for md in md_files:
+            sources.append({
+                "type": "markdown", 
+                "path": md,
+                "filename": os.path.basename(md)
+            })
+        
+        return sources
+    
+    def extract_from_pdf(self, pdf_path: str) -> Dict:
+        """Extract content from a specific PDF file"""
+        try:
+            pdf_extractor = PDFExtractor(self.docs_dir)
+            content = pdf_extractor.extract_text(pdf_path)
+            
+            # Create document
+            doc_id = f"pdf_{os.path.basename(pdf_path).replace('.pdf', '')}"
+            doc = TrainingDocument(
+                doc_id=doc_id,
+                title=os.path.basename(pdf_path),
+                source_type="pdf",
+                source_path=pdf_path,
+                content=content,
+                extracted_at=datetime.now(),
+                keywords=pdf_extractor._extract_keywords(content)
+            )
+            
+            # Chunk the document
+            chunks = self.knowledge_base.chunk_document(doc)
+            
+            return {
+                "success": True,
+                "document": {
+                    "id": doc.doc_id,
+                    "title": doc.title,
+                    "content_length": len(doc.content),
+                    "chunks_created": len(chunks)
+                },
+                "chunks": [
+                    {
+                        "id": chunk.chunk_id,
+                        "type": chunk.chunk_type,
+                        "topic": chunk.topic,
+                        "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
+                    }
+                    for chunk in chunks
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(f"PDF extraction error for {pdf_path}: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def _get_last_update_time(self) -> Optional[str]:
+        """Get last update time from chunks file"""
+        try:
+            chunks_file = f"{self.knowledge_base.data_dir}/chunks.json"
+            if os.path.exists(chunks_file):
+                return datetime.fromtimestamp(os.path.getmtime(chunks_file)).isoformat()
+        except:
+            pass
+        return None
 
 
 # Usage example
