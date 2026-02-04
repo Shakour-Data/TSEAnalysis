@@ -70,11 +70,11 @@ class NaNHandler:
                     logger.info(f"✅ {dropped} NaN rows ہٹائے گئے")
             
             elif strategy == 'forward_fill':
-                result = df.fillna(method='ffill')
+                result = df.ffill()
                 logger.debug("✅ Forward fill applied")
             
             elif strategy == 'backward_fill':
-                result = df.fillna(method='bfill')
+                result = df.bfill()
                 logger.debug("✅ Backward fill applied")
             
             elif strategy == 'mean':
