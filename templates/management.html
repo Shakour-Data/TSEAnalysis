@@ -114,9 +114,72 @@
                 </div>
             </div>
         </div>
+
+        <!-- Test Runner Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3">
+                        <h5 class="mb-0 fw-black"><i class="fa-solid fa-vial-circle-check me-2"></i> تست‌رانر متمرکز (AI-Powered)</h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-warning text-dark fw-bold" onclick="runTests('tests/test_utils_coverage.py')">
+                                <i class="fa-solid fa-bolt me-1"></i> تست Utils
+                            </button>
+                            <button class="btn btn-sm btn-success fw-bold" onclick="runTests('tests/')">
+                                <i class="fa-solid fa-play me-1"></i> اجرای کل تست‌ها
+                            </button>
+                            <button class="btn btn-sm btn-outline-light" onclick="updateTestResults()">
+                                <i class="fa-solid fa-sync"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">شناسه</th>
+                                        <th>مجموعه</th>
+                                        <th>وضعیت</th>
+                                        <th>زمان شروع</th>
+                                        <th>تحلیل هوشمند (AI Diagnosis)</th>
+                                        <th class="pe-4 text-center">مشاهده لاگ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="test_results_body">
+                                    <tr><td colspan="6" class="text-center p-4">در حال بارگذاری نتایج...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Log Modal -->
+    <div class="modal fade" id="logModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-black">خروجی کامل تست</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body bg-dark text-light p-0">
+                    <pre id="log_content" class="m-0 p-4" style="font-family: Consolas, monospace; font-size: 13px;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Modal instance
+        let logModal;
+        document.addEventListener('DOMContentLoaded', () => {
+             logModal = new bootstrap.Modal(document.getElementById('logModal'));
+        });
+
         async function updateStats() {
             try {
                 const resp = await fetch('/api/market_status');
@@ -172,6 +235,79 @@
             } catch (e) { alert("خطا در ارتباط با سرور"); }
         }
 
+        // --- Test Runner Functions ---
+        async function runTests(suite) {
+            try {
+                const resp = await fetch('/api/tests/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ suite })
+                });
+                const data = await resp.json();
+                alert(data.message);
+                updateTestResults();
+            } catch (e) { alert("خطا در شروع تست"); }
+        }
+
+        let currentResults = [];
+
+        async function updateTestResults() {
+            try {
+                const resp = await fetch('/api/tests/results');
+                const data = await resp.json();
+                currentResults = data;
+                
+                const body = document.getElementById('test_results_body');
+                if (data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="text-center p-4">هیچ تستی هنوز اجرا نشده است.</td></tr>';
+                    return;
+                }
+
+                body.innerHTML = data.map(r => `
+                    <tr>
+                        <td class="ps-4">#${r.id}</td>
+                        <td class="small fw-bold">${r.test_suite}</td>
+                        <td>
+                            <span class="badge ${getStatusBadge(r.status)} px-3">${statusMap(r.status)}</span>
+                        </td>
+                        <td class="small">${new Date(r.start_time).toLocaleString('fa-IR')}</td>
+                        <td>
+                            <div class="small text-info fw-bold" style="max-width: 300px;">
+                                <i class="fa-solid fa-robot me-1"></i> ${r.ai_analysis || 'در انتظار تحلیل...'}
+                            </div>
+                        </td>
+                        <td class="text-center pe-4">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="showLog(${r.id})">
+                                <i class="fa-solid fa-terminal"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error("Error fetching tests:", e); }
+        }
+
+        function getStatusBadge(s) {
+            if (s === 'success') return 'bg-success';
+            if (s === 'fail') return 'bg-danger';
+            if (s === 'running') return 'bg-primary text-white';
+            return 'bg-secondary';
+        }
+
+        function statusMap(s) {
+            if (s === 'success') return 'پاس شده';
+            if (s === 'fail') return 'خطا';
+            if (s === 'running') return 'در حال اجرا...';
+            return s;
+        }
+
+        function showLog(id) {
+            const run = currentResults.find(r => r.id === id);
+            if (run) {
+                document.getElementById('log_content').textContent = run.logs || 'بدون لاگ';
+                logModal.show();
+            }
+        }
+
         function updateClock() {
             const now = new Date();
             document.getElementById('current_time').textContent = now.toLocaleTimeString('fa-IR');
@@ -180,8 +316,10 @@
 
         setInterval(updateClock, 1000);
         setInterval(updateStats, 5000);
+        setInterval(updateTestResults, 4000);
         updateClock();
         updateStats();
+        updateTestResults();
     </script>
 </body>
 </html>
