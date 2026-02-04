@@ -36,7 +36,8 @@ def test_encoding_utils_extra_coverage():
     assert EncodingHandler.detect_encoding(b'\xc7\x84\xc7\x81\xc7\x84\xc7\x85') == 'utf-8'
 
     # Test safe_json_loads
-    assert EncodingHandler.safe_json_loads('{"a":1}')["a"] == 1
+    result = EncodingHandler.safe_json_loads('{"a":1}')
+    assert result is not None and result["a"] == 1  # type: ignore[index]
     assert EncodingHandler.safe_json_loads(None) is None
     assert EncodingHandler.safe_json_loads('invalid json') is None
 
