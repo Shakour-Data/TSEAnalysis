@@ -11,6 +11,7 @@ import zipfile
 import logging
 import json
 import hashlib
+import xlsxwriter
 from functools import wraps
 
 from app.services.tsetmc import client
@@ -409,35 +410,40 @@ def get_technical_analysis(symbol):
         if len(prepared_data) > 14:
             # RSI
             try:
-                rsi = TechnicalAnalyzer.calculate_rsi(prepared_data['close'])
-                analysis["indicators"]["rsi"] = rsi.iloc[-1] if not rsi.empty else None
+                # type: ignore[assignment,operator]
+                rsi = EnhancedTechnicalAnalyzer.calculate_rsi(prepared_data['close'])  # type: ignore[index]
+                analysis["indicators"]["rsi"] = float(rsi.iloc[-1]) if rsi.size > 0 else None
             except:
                 analysis["indicators"]["rsi"] = None
 
             # MACD
             try:
-                macd, signal, hist = TechnicalAnalyzer.calculate_macd(prepared_data['close'])
+                # type: ignore[assignment,operator]
+                macd, signal, hist = EnhancedTechnicalAnalyzer.calculate_macd(prepared_data['close'])  # type: ignore[index]
                 analysis["indicators"]["macd"] = {
-                    "macd": macd.iloc[-1] if not macd.empty else None,
-                    "signal": signal.iloc[-1] if not signal.empty else None,
-                    "histogram": hist.iloc[-1] if not hist.empty else None
+                    "macd": float(macd.iloc[-1]) if macd.size > 0 else None,
+                    "signal": float(signal.iloc[-1]) if signal.size > 0 else None,
+                    "histogram": float(hist.iloc[-1]) if hist.size > 0 else None
                 }
             except:
                 analysis["indicators"]["macd"] = None
 
             # Bollinger Bands
             try:
-                upper, middle, lower = TechnicalAnalyzer.calculate_bollinger_bands(prepared_data['close'])
+                # type: ignore[assignment,operator]
+                upper, middle, lower = EnhancedTechnicalAnalyzer.calculate_bollinger_bands(prepared_data['close'])  # type: ignore[index]
                 analysis["indicators"]["bollinger"] = {
-                    "upper": upper.iloc[-1] if not upper.empty else None,
-                    "middle": middle.iloc[-1] if not middle.empty else None,
-                    "lower": lower.iloc[-1] if not lower.empty else None
+                    "upper": float(upper.iloc[-1]) if upper.size > 0 else None,
+                    "middle": float(middle.iloc[-1]) if middle.size > 0 else None,
+                    "lower": float(lower.iloc[-1]) if lower.size > 0 else None
                 }
             except:
                 analysis["indicators"]["bollinger"] = None
 
         # Generate signals
-        analysis["signals"] = TechnicalAnalyzer.generate_signals(prepared_data)
+        # type: ignore[arg-type]
+        signals_result = EnhancedTechnicalAnalyzer.generate_signals(prepared_data)  # type: ignore[arg-type]
+        analysis["signals"] = signals_result
 
         return jsonify(analysis)
 
@@ -647,7 +653,12 @@ def download_comprehensive():
                 # Add basic formatting
                 workbook = writer.book
                 worksheet = writer.sheets['Daily Analysis']
-                header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC', 'border': 1})
+                # Add basic formatting
+                workbook = writer.book  # type: ignore[assignment]
+                worksheet = writer.sheets['Daily Analysis']
+                # Ignore xlsxwriter Workbook type stub - runtime works correctly
+                # type: ignore[attr-defined]
+                header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC', 'border': 1})  # type: ignore[attr-defined]
                 for col_num, value in enumerate(df_daily.columns.values):
                     worksheet.write(0, col_num, value, header_format)
             
