@@ -45,11 +45,13 @@ class EncodingHandler:
             return text.encode(target_encoding, errors='replace').decode(target_encoding)
     
     @staticmethod
-    def safe_decode(encoded_text: bytes, encoding: str = "utf-8") -> str | None:
+    def safe_decode(encoded_text: bytes | Any, encoding: str = "utf-8") -> str | None:
         """
         Decodes a byte string to a string using the specified encoding,
         handling potential errors by returning None.
         """
+        if isinstance(encoded_text, str):
+            return encoded_text
         if not isinstance(encoded_text, bytes):
             try:
                 return str(encoded_text)
@@ -62,7 +64,7 @@ class EncodingHandler:
             return None
 
     @staticmethod
-    def normalize_unicode(text: str, form: str = "NFC") -> str:
+    def normalize_unicode(text: str | Any, form: str = "NFC") -> str | Any:
         """
         Unicode نارملائزیشن - مختلف forms کو یکساں کریں
 
@@ -73,7 +75,7 @@ class EncodingHandler:
         Returns:
             str: نارملائزڈ متن
         """
-        if not text or not isinstance(text, str):
+        if not isinstance(text, str):
             return text
         
         import unicodedata
@@ -87,7 +89,7 @@ class EncodingHandler:
             return text
     
     @staticmethod
-    def remove_control_characters(text: str) -> str:
+    def remove_control_characters(text: str | Any) -> str | Any:
         """کنٹرول کریکٹرز کو ہٹائیں"""
         if not isinstance(text, str):
             return text
@@ -140,7 +142,7 @@ class EncodingHandler:
             return json.dumps({"error": str(e)})
 
     @staticmethod
-    def safe_json_loads(text, **kwargs):
+    def safe_json_loads(text, **kwargs) -> dict | list | None:
         """JSON سے محفوظ طریقے سے decode کریں"""
         if not text:
             return None
@@ -150,15 +152,18 @@ class EncodingHandler:
             if isinstance(text, bytes):
                 text = text.decode('utf-8')
             
-            return json.loads(text, **kwargs)
-        except json.JSONDecodeError as e:
+            result = json.loads(text, **kwargs)
+            return result if result is not None else None
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.error(f"JSON decode ناکام: {e}")
             # Fallback - اضافی whitespace/control characters کو ہٹائیں
-            text_cleaned = EncodingHandler.remove_control_characters(text)
             try:
-                return json.loads(text_cleaned)
-            except json.JSONDecodeError:
-                logger.error(f"JSON decode retry ناکام: {text[:100]}")
+                text_str = text.decode('utf-8') if isinstance(text, bytes) else str(text)
+                text_cleaned = EncodingHandler.remove_control_characters(text_str)
+                result = json.loads(text_cleaned)
+                return result if result is not None else None
+            except (json.JSONDecodeError, AttributeError):
+                logger.error(f"JSON decode retry ناکام: {str(text)[:100]}")
                 return None
     
     @staticmethod
@@ -189,9 +194,9 @@ class EncodingHandler:
         return s
 
     @staticmethod
-    def urlencode_safely(url_or_param: str) -> str:
+    def urlencode_safely(url_or_param: str | Any) -> str:
         """URL encoding محفوظ طریقے سے"""
-        if url_or_param is None:
+        if url_or_param is None or not isinstance(url_or_param, str):
             return ""
         try:
             return quote(url_or_param, safe="")
@@ -200,9 +205,9 @@ class EncodingHandler:
             return url_or_param
 
     @staticmethod
-    def urldecode_safely(encoded_text: str) -> str:
+    def urldecode_safely(encoded_text: str | Any) -> str:
         """URL decoding محفوظ طریقے سے"""
-        if encoded_text is None:
+        if encoded_text is None or not isinstance(encoded_text, str):
             return ""
         try:
             return unquote(encoded_text, errors='replace')
