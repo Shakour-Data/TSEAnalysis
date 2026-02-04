@@ -199,7 +199,7 @@ class PersianNLP:
         return text
     
     @staticmethod
-    def analyze_sentiment(text: str) -> Dict[str, float]:
+    def analyze_sentiment(text: str) -> Dict[str, float | str]:
         """Analyze sentiment of text (returns scores 0-1)"""
         text = PersianNLP.normalize(text).lower()
         
@@ -713,7 +713,8 @@ class ContentGenerator:
         
         content_id = hashlib.md5(f"edu{title}{datetime.now()}".encode()).hexdigest()[:12]
         
-        content = GeneratedContent(
+        # type: ignore[assignment]
+        generated_content = GeneratedContent(
             content_id=content_id,
             content_type=ContentType.EDUCATIONAL,
             title=f"📚 آموزش: {title}",
@@ -723,10 +724,12 @@ class ContentGenerator:
             generated_at=datetime.now()
         )
         
-        self.content_history[ContentType.EDUCATIONAL.value].append(content)
+        # type: ignore[arg-type]
+        self.content_history[ContentType.EDUCATIONAL.value].append(generated_content)
         self._save_content_history()
         
-        return content
+        # type: ignore[return-value]
+        return generated_content
     
     def rate_content(self, content_id: str, rating: float, was_helpful: bool):
         """Rate generated content for learning"""
