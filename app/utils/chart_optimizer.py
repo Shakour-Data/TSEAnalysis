@@ -190,22 +190,5 @@ class ChartOptimizer:
         
         return period_days * points_per_day
     
-    @staticmethod
-    def get_chart_cache_key(symbol, chart_type, period, resolution):
-        """Chart کے لیے cache key بنائیں"""
-        import hashlib
-        
-        key_data = f"{symbol}_{chart_type}_{period}_{resolution}"
-        return hashlib.md5(key_data.encode()).hexdigest()
-        """
-        چیک کریں کہ data کو aggregate کرنا چاہیے؟
-        بہت زیادہ data points سے chart پڑھنا مشکل ہو جاتا ہے
-        """
-        should_aggregate = data_points > max_points
-        
-        if should_aggregate:
-            aggregation_factor = data_points // max_points + 1
-            logger.info(f"📊 Data aggregation needed: {data_points} → {data_points // aggregation_factor} points")
-        
-        return should_aggregate
+    # get_chart_cache_key is already defined at line 19-23
 
