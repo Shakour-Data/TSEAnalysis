@@ -11,6 +11,7 @@ from memory_profiler import profile, memory_usage
 import psutil
 import os
 import sys
+import pandas as pd  # type: ignore[import]
 
 # Add the app directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -116,12 +117,16 @@ def profile_chart_generation():
         start_time = time.time()
 
         try:
+            # Convert mock_data to DataFrame for the methods
+            df = pd.DataFrame(mock_data['data'])
+            symbol = mock_data.get('symbol', 'TEST')
+            
             if chart_type == 'correlation_matrix':
-                result = infographics.generate_correlation_matrix(mock_data)
+                result = infographics.generate_correlation_matrix(df, symbol)
             elif chart_type == 'volatility_analysis':
-                result = infographics.generate_volatility_analysis(mock_data)
+                result = infographics.generate_volatility_analysis(df, symbol)
             elif chart_type == 'seasonal_analysis':
-                result = infographics.generate_seasonal_analysis(mock_data)
+                result = infographics.generate_seasonal_analysis(df, symbol)
 
             end_time = time.time()
             current, peak = tracemalloc.get_traced_memory()
