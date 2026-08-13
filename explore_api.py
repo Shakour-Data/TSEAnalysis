@@ -6,6 +6,8 @@ def check_type(api_type):
     url = f"https://brsapi.ir/FreeTsetmcApi/Api/Tsetmc/AllSymbols.php?type={api_type}"
     try:
         response = requests.get(url, impersonate="chrome110", timeout=20)
+        print(f"Type {api_type} status: {response.status_code}")
+        print(f"Type {api_type} text[:300]: {response.text[:300]}")
         data = response.json()
         print(f"--- API Type {api_type} ---")
         if isinstance(data, list):
