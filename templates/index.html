@@ -13,31 +13,91 @@
     
     <style>
         :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #22c55e;
+            --primary-color: #1e3a8a; /* Navy Blue */
+            --primary-dark: #1e293b;
+            --secondary-color: #475569;
+            --accent-color: #3b82f6; /* Bright Blue */
+            --success-color: #10b981;
             --danger-color: #ef4444;
-            --bg-light: #f1f5f9;
-            --sidebar-bg: #ffffff;
-            --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
+            --bg-light: #f8fafc;
+            --sidebar-bg: #1e3a8a;
+            --sidebar-text: #ffffff;
+            --card-bg: #ffffff;
+            --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
             --border-color: #e2e8f0;
+            --navbar-bg: #1e3a8a;
         }
 
         [data-theme="dark"] {
-            --bg-light: #0f172a;
-            --sidebar-bg: #1e293b;
+            --bg-light: #030712;
+            --sidebar-bg: #111827;
+            --sidebar-text: #f1f5f9;
+            --card-bg: #1e293b;
             --text-primary: #f1f5f9;
             --text-secondary: #94a3b8;
             --border-color: #334155;
+            --card-shadow: none;
+            --navbar-bg: #111827;
         }
 
         body { 
             background-color: var(--bg-light); 
             font-family: 'Vazirmatn', Tahoma, sans-serif;
             color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            overflow-x: hidden;
+            letter-spacing: -0.01em;
+        }
+
+        /* Helper Classes */
+        .bg-primary-soft { background-color: rgba(30, 58, 138, 0.08) !important; }
+        .bg-success-soft { background-color: rgba(16, 185, 129, 0.08) !important; }
+        .bg-danger-soft { background-color: rgba(239, 68, 68, 0.08) !important; }
+        .bg-info-soft { background-color: rgba(59, 130, 246, 0.08) !important; }
+        .bg-warning-soft { background-color: rgba(245, 158, 11, 0.08) !important; }
+        .bg-light-soft { background-color: #fcfdfe !important; }
+        
+        .fw-black { font-weight: 900 !important; }
+        .fw-extrabold { font-weight: 800 !important; }
+        
+        .transition-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .shadow-hover:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; 
+        }
+
+        /* Nav Pills Styling */
+        .nav-pills .nav-link {
+            color: var(--text-secondary);
+            background: transparent;
+            border: 1px solid transparent;
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+            box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
+        }
+        .nav-pills .nav-link:hover:not(.active) {
+            background-color: var(--bg-light);
+            border-color: var(--border-color);
+        }
+
+        .btn-package {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white !important;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 800;
             transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
+        }
+        .btn-package:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.3);
         }
 
         /* Sidebar Styling */
@@ -46,248 +106,392 @@
             min-height: 100vh; 
             padding: 0;
             border-left: 1px solid var(--border-color); 
-            box-shadow: 4px 0 24px rgba(0,0,0,0.02);
             position: sticky;
             top: 0;
             z-index: 100;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--sidebar-text);
         }
+        
         .sidebar-header {
-            padding: 2rem 1.5rem;
-            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            padding: 2.5rem 1.5rem;
+            background: transparent;
             color: white;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .sidebar-header h4 { font-weight: 800; margin: 0; font-size: 1.25rem; }
+        .sidebar-header h4 { font-weight: 800; margin: 0; font-size: 1.4rem; letter-spacing: -0.03em; }
         
         #theme-toggle {
             cursor: pointer;
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 10px;
-            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
             color: white;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        #theme-toggle:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+        #theme-toggle:hover { background: rgba(255,255,255,0.2); transform: rotate(15deg); }
 
-        .sidebar-content { padding: 0 1rem 2rem 1rem; }
+        .sidebar-content { padding: 0 1.25rem 2.5rem 1.25rem; }
 
         .nav-link { 
-            color: var(--text-secondary); 
-            padding: 0.75rem 1rem; 
-            border-radius: 12px; 
-            margin-bottom: 4px; 
+            color: rgba(255, 255, 255, 0.7); 
+            padding: 0.85rem 1.25rem; 
+            border-radius: 14px; 
+            margin-bottom: 6px; 
             cursor: pointer; 
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             font-weight: 500;
+            font-size: 0.95rem;
         }
-        .nav-link i { width: 20px; text-align: center; font-size: 1.1rem; }
-        .nav-link:hover { background-color: var(--bg-light); color: var(--primary-color); transform: translateX(-4px); }
-        .nav-link.active { background-color: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
-        .nav-link.disabled { opacity: 0.4; cursor: not-allowed; }
+        .nav-link i { width: 22px; text-align: center; font-size: 1.2rem; transition: transform 0.2s; }
+        .nav-link:hover { 
+            background-color: rgba(255,255,255,0.08); 
+            color: #ffffff; 
+            transform: scale(1.02);
+        }
+        .nav-link:hover i { transform: scale(1.1); }
+        .nav-link.active { 
+            background-color: #ffffff !important; 
+            color: var(--primary-color) !important; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); 
+            font-weight: 700;
+        }
+        .nav-link.disabled { opacity: 0.3; cursor: not-allowed; }
 
         .section-title { 
-            font-size: 0.75rem; 
-            font-weight: 700; 
-            color: var(--text-secondary); 
-            margin: 1.5rem 1rem 0.75rem 1rem; 
+            font-size: 0.7rem; 
+            font-weight: 800; 
+            color: rgba(255, 255, 255, 0.5); 
+            margin: 2rem 1.25rem 0.75rem 1.25rem; 
             text-transform: uppercase; 
-            letter-spacing: 0.05em;
+            letter-spacing: 0.1em;
         }
 
         /* Main Content */
-        .main-content { padding: 2rem; }
+        .main-content { padding: 2.5rem; }
         
         .card { 
-            border-radius: 20px; 
+            border-radius: 24px; 
             box-shadow: var(--card-shadow); 
             border: 1px solid var(--border-color); 
-            background: var(--sidebar-bg);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+            background: var(--card-bg);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            overflow: hidden;
         }
+        .card:hover { box-shadow: var(--card-shadow-hover); }
         
-        .filter-card { margin-bottom: 2rem; }
+        .filter-card { border: none; background: var(--card-bg); margin-bottom: 2.5rem; padding: 2rem !important; }
 
-        .form-label { font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .form-label { font-weight: 700; color: var(--text-primary); margin-bottom: 0.6rem; font-size: 0.85rem; }
         .form-control, .form-select {
-            background-color: var(--sidebar-bg);
+            background-color: var(--bg-light);
             color: var(--text-primary);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            padding: 0.6rem 1rem;
-            transition: all 0.2s;
+            border-radius: 14px;
+            border: 2px solid transparent;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.95rem;
+            transition: all 0.3s;
         }
         .form-control:focus, .form-select:focus {
-            background-color: var(--sidebar-bg);
+            background-color: var(--card-bg);
             color: var(--text-primary);
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.1);
         }
+
+        /* Navbar Improvement */
+        .navbar { 
+            background-color: var(--navbar-bg) !important; 
+            padding: 0.75rem 0; 
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(8px);
+        }
+        .navbar-brand { font-size: 1.4rem; letter-spacing: -0.02em; }
 
         /* Table Styling */
         .table-container { 
-            background: var(--sidebar-bg); 
+            background: var(--card-bg); 
             padding: 1.5rem; 
             border-radius: 24px; 
             box-shadow: var(--card-shadow);
-            max-height: 700px;
+            max-height: 800px;
             overflow: auto;
             border: 1px solid var(--border-color);
         }
         
         .table { margin-bottom: 0; vertical-align: middle; color: var(--text-primary); }
         .table thead th {
-            background: var(--bg-light);
+            background: var(--card-bg);
             color: var(--text-secondary);
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.025em;
-            padding: 1rem;
-            border-bottom: 2px solid var(--border-color);
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
             position: sticky;
             top: 0;
             z-index: 20;
         }
-        .table tbody td { padding: 1rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
-        .table-striped tbody tr:nth-of-type(odd) { background-color: var(--bg-light); }
-        .table-hover tbody tr:hover { background-color: var(--border-color); }
+        .table tbody td { padding: 1.25rem; font-size: 0.92rem; border-bottom: 1px solid var(--border-color); }
+        .table-hover tbody tr:hover { background-color: rgba(59, 130, 246, 0.03); }
 
         /* Status Colors */
-        .text-up { color: var(--success-color) !important; font-weight: 700; }
-        .text-down { color: var(--danger-color) !important; font-weight: 700; }
+        .text-up { color: var(--success-color) !important; font-weight: 800; }
+        .text-down { color: var(--danger-color) !important; font-weight: 800; }
         
         /* Signal Colors */
-        .signal-bullish { color: var(--success-color); font-weight: bold; }
-        .signal-bearish { color: var(--danger-color); font-weight: bold; }
-        .signal-oversold { color: #3b82f6; font-weight: bold; }
-        .signal-overbought { color: #f59e0b; font-weight: bold; }
+        .signal-bullish { color: var(--success-color); font-weight: 800; padding: 4px 12px; background: rgba(16, 185, 129, 0.1); border-radius: 10px; display: inline-block; }
+        .signal-bearish { color: var(--danger-color); font-weight: 800; padding: 4px 12px; background: rgba(239, 68, 68, 0.1); border-radius: 10px; display: inline-block; }
+        .signal-oversold { color: #3b82f6; font-weight: 800; padding: 4px 12px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: inline-block; }
+        .signal-overbought { color: #f59e0b; font-weight: 800; padding: 4px 12px; background: rgba(245, 158, 11, 0.1); border-radius: 10px; display: inline-block; }
 
         /* Watchlist Styling */
         .watchlist-item {
-            background: var(--bg-light);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 4px 12px;
-            font-size: 0.8rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 16px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
             display: flex;
             align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .watchlist-item:hover { background: var(--primary-color); color: white; }
-        .watchlist-item .remove-item { cursor: pointer; opacity: 0.6; }
-        .watchlist-item .remove-item:hover { opacity: 1; color: #ff4d4d; }
-
-        .badge-up { background-color: #dcfce7; color: #166534; }
-        .badge-down { background-color: #fee2e2; color: #991b1b; }
-
-        .bg-success-soft { background-color: rgba(34, 197, 94, 0.1); }
-        .bg-danger-soft { background-color: rgba(239, 68, 68, 0.1); }
-
-        /* Sidebar Glassmorphism */
-        .sidebar-content select, .sidebar-content input {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
-        }
-
-        /* Buttons Tooltips/Hover */
-        .pointer { cursor: pointer; }
-        
-        .btn-group .btn {
-            border-radius: 10px;
-            font-size: 0.85rem;
-            padding: 0.5rem;
-        }
-
-        /* Responsive Improvements */
-        @media (max-width: 992px) {
-            .sidebar {
-                position: relative;
-                min-height: auto;
-                border-left: none;
-                border-bottom: 2px solid var(--border-color);
-            }
-        }
-
-        /* Custom scrollbar for sidebar */
-        .sidebar { overflow-y: auto; max-height: 100vh; }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
-
-        /* Buttons */
-        .btn-primary { 
-            background-color: var(--primary-color); 
-            border: none; 
-            border-radius: 12px; 
-            padding: 0.75rem 1.5rem; 
-            font-weight: 700;
-            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+            justify-content: space-between;
+            margin-bottom: 8px;
             transition: all 0.3s;
         }
-        .btn-primary:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
-        
-        .btn-download { 
-            border-radius: 10px; 
-            font-weight: 600; 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 8px;
-            padding: 0.5rem 1rem;
-        }
+        .watchlist-item:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+        .watchlist-item span { font-weight: 600; cursor: pointer; }
+        .watchlist-item .remove-btn { color: rgba(255,255,255,0.4); cursor: pointer; border: none; background: none; padding: 0; }
+        .watchlist-item .remove-btn:hover { color: var(--danger-color); }
 
-        /* Loading Animation */
-        #loading { padding: 4rem 0; display: none; }
-        .spinner-modern {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem auto;
+        /* Modern Glass Select Improvement */
+        .sidebar-content select, .sidebar-content input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            font-weight: 600;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .sidebar-content select option { background: var(--sidebar-bg); color: white; }
+
+        /* Professional Buttons */
+        .btn-primary { 
+            background: linear-gradient(135deg, var(--primary-color), #3b82f6); 
+            border: none; 
+            border-radius: 16px; 
+            padding: 0.85rem 1.75rem; 
+            font-weight: 800;
+            box-shadow: 0 4px 14px 0 rgba(30, 58, 138, 0.39);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-primary:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 10px 20px rgba(30, 58, 138, 0.3); 
+            filter: brightness(1.1); 
+        }
+        
+        .btn-package {
+            background: linear-gradient(135deg, #7c3aed, #4f46e5);
+            color: white !important;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 18px;
+            font-weight: 800;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+        .btn-package:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(124, 58, 237, 0.4); }
+
+        /* Loading */
+        .spinner-modern {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(30, 58, 138, 0.1);
+            border-top: 5px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 20px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* Responsive Adjustments */
-        @media (max-width: 768px) {
-            .sidebar { min-height: auto; border-left: none; border-bottom: 1px solid #e2e8f0; }
-            .main-content { padding: 1rem; }
+        /* ===== MOBILE RESPONSIVENESS ===== */
+        /* Tablets (768px and up) */
+        @media (max-width: 1200px) {
+            .sidebar {
+                position: sticky;
+                width: 280px;
+            }
+            .main-content { margin-right: 0; }
+        }
+
+        /* Mobile Phones (576px and down) */
+        @media (max-width: 576px) {
+            /* Layout */
+            body { padding: 0; }
+            .container-fluid { padding: 0; }
+            
+            /* Sidebar */
+            .sidebar {
+                position: fixed !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: auto !important;
+                top: 0;
+                right: -100%;
+                z-index: 1050;
+                transition: right 0.3s ease;
+                border: none;
+                border-bottom: 1px solid var(--border-color);
+                max-height: 100vh;
+                overflow-y: auto;
+            }
+            .sidebar.active { right: 0; }
+            .sidebar-header { padding: 1.5rem; margin-bottom: 0.5rem; }
+            .sidebar-header h4 { font-size: 1.2rem; }
+            
+            /* Main Content */
+            .main-content { 
+                margin-right: 0 !important;
+                padding: 1rem !important;
+            }
+            
+            /* Cards */
+            .card {
+                padding: 1rem !important;
+                margin-bottom: 1rem;
+                border-radius: 0.75rem;
+            }
+            
+            /* Buttons */
+            .btn {
+                width: 100%;
+                padding: 0.75rem !important;
+                margin-bottom: 0.5rem;
+                font-size: 0.9rem;
+                border-radius: 0.5rem;
+            }
+            .btn-group { width: 100%; }
+            .btn-group .btn { width: auto; flex: 1; }
+            
+            /* Forms */
+            .form-control, .form-select {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 0.75rem;
+                border-radius: 0.5rem;
+            }
+            input[type="text"], input[type="number"] { font-size: 16px; }
+            
+            /* Tables */
+            .table-responsive {
+                -webkit-overflow-scrolling: touch;
+                font-size: 0.85rem;
+            }
+            .table { margin-bottom: 0; }
+            .table th, .table td { padding: 0.5rem 0.25rem; }
+            
+            /* Grid */
+            .row { margin-right: -0.5rem; margin-left: -0.5rem; }
+            .col, [class*="col-"] { padding-right: 0.5rem; padding-left: 0.5rem; }
+            .col-md-2, .col-md-3, .col-md-4, .col-md-6 { 
+                flex: 0 0 100% !important;
+                max-width: 100% !important;
+                margin-bottom: 0.5rem;
+            }
+            
+            /* Typography */
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+            h3 { font-size: 1.1rem; }
+            .h4, h4 { font-size: 1rem; }
+            .small, small { font-size: 0.8rem; }
+            
+            /* Summary Cards */
+            .p-4 { padding: 1rem !important; }
+            .mb-4 { margin-bottom: 1rem !important; }
+            .gap-4 { gap: 0.5rem !important; }
+            .g-4 { gap: 0.5rem !important; }
+            
+            /* Charts */
+            #chart-container { height: 250px; }
+            canvas { max-width: 100%; }
+            
+            /* Navigation */
+            .navbar { padding: 0.5rem; }
+            .navbar-brand { font-size: 1rem; }
+            
+            /* Collapse animations */
+            .collapse { 
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+            .collapse.show { max-height: 500px; }
+            
+            /* Touch optimizations */
+            .btn, a, .nav-link { 
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
+            
+            /* Spacing utilities */
+            .px-2, .px-3, .px-4 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+            .py-2, .py-3, .py-4 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+            
+            /* Text alignment */
+            .text-center { text-align: center; }
+            
+            /* Inputs */
+            select, input { max-width: 100%; }
+        }
+
+        /* Extra Small (up to 480px) */
+        @media (max-width: 480px) {
+            .sidebar-header h4 { font-size: 1rem; }
+            h1 { font-size: 1.25rem; }
+            .btn { font-size: 0.85rem; padding: 0.6rem !important; }
+            .table { font-size: 0.75rem; }
+            .card { padding: 0.75rem !important; }
+        }
+
+        /* Landscape orientation */
+        @media (max-height: 600px) and (orientation: landscape) {
+            .sidebar { max-height: 100vh; overflow-y: auto; }
+            .main-content { max-height: 100vh; overflow-y: auto; }
         }
     </style>
+
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-0" style="z-index: 1001;">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand fw-bold" href="/"><i class="fa-solid fa-brain me-2"></i> هوش مالی TSETMC</a>
+        <div class="container-fluid px-5">
+            <a class="navbar-brand fw-extrabold" href="/"><i class="fa-solid fa-gem me-2 text-info"></i> سامانه هوشمند سرمایه</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto gap-3">
                     <li class="nav-item">
-                        <a class="nav-link active fw-bold" href="/"><i class="fa-solid fa-chart-line me-1"></i> تحلیل تکنیکال</a>
+                        <a class="nav-link py-2 px-4 active fw-bold" href="/"><i class="fa-solid fa-chart-pie me-2"></i> پیشخوان تحلیل</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/api_test"><i class="fa-solid fa-vial me-1"></i> تست وب‌سرویس</a>
+                        <a class="nav-link py-2 px-4" href="/api_test"><i class="fa-solid fa-bolt me-2"></i> عیب‌یابی وب‌سرویس</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-2 px-4" href="/management"><i class="fa-solid fa-gauge-high me-2 text-warning"></i> مدیریت درخواست‌ها</a>
                     </li>
                 </ul>
             </div>
@@ -307,108 +511,94 @@
             <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 sidebar">
                 <div class="sidebar-header">
-                    <h4><i class="fa-solid fa-brain me-2"></i> هوش مالی</h4>
-                    <div id="theme-toggle" title="تغییر تم">
+                    <h4><i class="fa-solid fa-layer-group me-2"></i> مدیریت پورتفو</h4>
+                    <div id="theme-toggle" title="تغییر تم بصری">
                         <i class="fa-solid fa-moon"></i>
                     </div>
                 </div>
                 
                 <div class="sidebar-content">
-                    <div class="section-title">انتخاب بازار</div>
+                    <div class="section-title">بازار معاملاتی</div>
                     <div class="px-2">
                         <select id="asset_type" class="form-select mb-3">
-                            <option value="">انتخاب بازار...</option>
-                            <optgroup label="بازارهای اصلی">
-                                <option value="1">بورس تهران</option>
-                                <option value="2">فرابورس ایران</option>
-                                <option value="5">صندوق‌های ETF</option>
-                                <option value="fixed_income">درآمد ثابت</option>
-                                <option value="3">بورس کالا و آتی</option>
-                                <option value="tashilat">تسهیلات مسکن</option>
+                            <option value="">-- انتخاب دقیق بازار --</option>
+                            <optgroup label="سهام و حق تقدم">
+                                <option value="1">بورس تهران (TSE)</option>
+                                <option value="2">فرابورس ایران (IFB)</option>
+                                <option value="4">بازار پایه (Payeh)</option>
                             </optgroup>
-                            <optgroup label="بازارهای پایه">
-                                <option value="4">بازار پایه</option>
+                            <optgroup label="صندوق‌ها و اوراق">
+                                <option value="5">صندوق‌های قابل معامله (ETF)</option>
+                                <option value="fixed_income">اوراق درآمد ثابت/بدهی</option>
+                                <option value="tashilat">تسهیلات مسکن (تسه)</option>
+                            </optgroup>
+                            <optgroup label="کالا و انرژی">
+                                <option value="commodity">بورس کالا و آتی</option>
+                                <option value="energy">بورس انرژی ایران</option>
                             </optgroup>
                             <optgroup label="شاخص‌ها">
-                                <option value="indices_market">شاخص‌های کل</option>
+                                <option value="indices_market">شاخص‌های کل و فرابورس</option>
                                 <option value="indices_industry">شاخص‌های صنایع</option>
+                            </optgroup>
+                            <optgroup label="بازارهای جهانی و ارز">
+                                <option value="tgju">طلا، ارز و کالا (TGJU)</option>
                             </optgroup>
                         </select>
                     </div>
 
                     <div class="section-title">جستجوی نماد</div>
                     <div class="px-2 mb-3">
-                        <div class="input-group input-group-sm">
-                            <input type="text" id="symbol_search" class="form-control" placeholder="جستجو..." disabled>
-                            <button id="btn_refresh_symbols" class="btn btn-outline-primary" type="button"><i class="fa-solid fa-rotate"></i></button>
+                        <div class="input-group">
+                            <input type="text" id="symbol_search" class="form-control" placeholder="جستجوی سریع..." disabled>
+                            <button id="btn_refresh_symbols" class="btn btn-outline-light" type="button"><i class="fa-solid fa-sync"></i></button>
                         </div>
-                        <select id="symbol" class="form-select form-select-sm mt-2" disabled>
+                        <select id="symbol" class="form-select mt-2" disabled>
                             <option value="">ابتدا بازار...</option>
                         </select>
                     </div>
 
-                    <div class="section-title">ابزارهای تحلیلی</div>
-                    <div id="analysis_list" class="nav flex-column px-2 mb-3">
-                        <div class="nav-link active" data-value="technical" data-desc="تحلیل تکنیکال جامع (۱۸ اندیکاتور در ۳ بعد روند، شتاب و نوسان)">
-                            <i class="fa-solid fa-chart-line"></i> تحلیل تکنیکال
+                    <div class="section-title">منو ابزارها</div>
+                    <div id="analysis_list" class="nav flex-column mb-4">
+                        <div class="nav-link active" data-value="technical" data-desc="تحلیل تکنیکال مولتی‌تایم‌فریم و شناسایی الگوها">
+                            <i class="fa-solid fa-chart-line"></i> استودیو تکنیکال
                         </div>
-                        <div class="nav-link" data-value="client_type" data-desc="تحلیل رفتار حقیقی و حقوقی (پول هوشمند و سرانه خرید)">
-                            <i class="fa-solid fa-users-gear"></i> ترکیب خریداران
+                        <div class="nav-link" data-value="client_type" data-desc="رهگیری پول هوشمند و قدرت خریداران حقیقی">
+                            <i class="fa-solid fa-user-secret"></i> تحلیل جریان پول
                         </div>
-                        <div class="nav-link" data-value="transactions" data-desc="مشاهده ریز معاملات روزانه و تشخیص کد به کد">
-                            <i class="fa-solid fa-list-check"></i> ریز معاملات
+                        <div class="nav-link" data-value="transactions" data-desc="مانیتورینگ لحظه‌ای ریز معاملات">
+                            <i class="fa-solid fa-microscope"></i> دیدبان معاملات
                         </div>
-                        <div class="nav-link" data-value="shareholders" data-desc="تغییرات سهامداران عمده و مالکان بالای یک درصد">
-                            <i class="fa-solid fa-handshake"></i> سهامداران عمده
-                        </div>
-                        <div class="nav-link" data-value="codal" data-desc="اطلاعیه‌های شبکه کدال و گزارش‌های دوره‌ای شرکت">
-                            <i class="fa-solid fa-envelope-open-text"></i> اطلاعیه‌های کدال
-                        </div>
-                        <div class="nav-link" data-value="nav" data-desc="محاسبه خالص ارزش دارایی‌ها (مخصوص صندوق‌های ETF)">
-                            <i class="fa-solid fa-scale-balanced"></i> محاسبه NAV
+                        <div class="nav-link" data-value="codal" data-desc="بررسی آخرین اطلاعیه‌های کدال">
+                            <i class="fa-solid fa-file-contract"></i> گزارشات کدال
                         </div>
                     </div>
 
                     <div class="section-title">دیده‌بان من</div>
                     <div id="watchlist_container" class="px-2">
-                        <div id="watchlist_items" class="d-flex flex-wrap gap-1 mb-2">
+                        <div id="watchlist_items" class="mb-3">
                             <!-- Watchlist items will be added here -->
                         </div>
-                        <button id="btn_add_watchlist" class="btn btn-sm btn-outline-primary w-100 rounded-pill mb-2">
-                            <i class="fa-solid fa-plus me-1"></i> افزودن به دیده‌بان
+                        <button id="btn_add_watchlist" class="btn btn-sm btn-outline-light w-100 rounded-4">
+                            <i class="fa-solid fa-plus-circle me-1"></i> افزودن نماد
                         </button>
                     </div>
 
-                    <div class="section-title">هشدارهای قیمت</div>
+                    <div class="section-title">گوش بزنگی قیمت</div>
                     <div id="alerts_container" class="px-2">
                         <div id="alerts_list" class="mb-2"></div>
                         <div class="row g-1">
-                            <div class="col-8">
-                                <input type="number" id="alert_price" class="form-control form-control-sm" placeholder="قیمت هدف...">
+                            <div class="col-7">
+                                <input type="number" id="alert_price" class="form-control form-control-sm" placeholder="قیمت هدف">
                             </div>
-                            <div class="col-4">
+                            <div class="col-5">
                                 <select id="alert_type" class="form-select form-select-sm">
-                                    <option value="above">↑بالا</option>
-                                    <option value="below">↓پایین</option>
+                                    <option value="above">↑ عبور</option>
+                                    <option value="below">↓ نزول</option>
                                 </select>
                             </div>
                         </div>
-                        <button id="btn_add_alert" class="btn btn-sm btn-primary w-100 mt-2">
-                            <i class="fa-solid fa-plus me-1"></i> ثبت هشدار
-                        </button>
-                    </div>
-                    
-                    <div class="mt-4 p-3 bg-light rounded-4 small text-muted border">
-                        <i class="fa-solid fa-circle-info me-1"></i>
-                        <span id="service_desc"></span>
-                    </div>
-                    
-                    <div class="mt-3 px-2">
-                        <button class="btn btn-sm btn-outline-secondary w-100 rounded-pill mb-2" data-bs-toggle="modal" data-bs-target="#statsModal">
-                            <i class="fa-solid fa-chart-pie me-1"></i> آمار درخواست‌ها
-                        </button>
-                        <button id="btn_sync_registry" class="btn btn-sm btn-outline-warning w-100 rounded-pill">
-                            <i class="fa-solid fa-cloud-arrow-down me-1"></i> بروزرسانی کل حافظه
+                        <button id="btn_add_alert" class="btn btn-sm btn-info w-100 mt-2 text-white fw-bold">
+                            ثبت زنگ هشدار
                         </button>
                     </div>
                 </div>
@@ -416,196 +606,240 @@
 
             <!-- Main Content -->
             <div class="col-md-9 col-lg-10 main-content">
-                <!-- Header Info -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h2 class="fw-bold mb-1">داشبورد تحلیل بازار</h2>
-                        <p class="text-muted mb-0">دسترسی هوشمند به داده‌های بورس اوراق بهادار تهران</p>
+                <!-- Dashboard Header -->
+                <div class="row mb-5 align-items-center">
+                    <div class="col-md-6">
+                        <h1 class="fw-extrabold mb-1" style="font-size: 2.2rem; letter-spacing: -0.04em;">میز کار تحلیلی</h1>
+                        <p class="text-secondary opacity-75">پایش هوشمند بازار سرمایه با استفاده از الگوریتم‌های پیشرفته</p>
                     </div>
-                    <div class="d-flex align-items-center gap-3">
-                        <div id="api_stats" class="bg-white border rounded-pill px-3 py-2 small text-muted d-none d-md-flex align-items-center">
-                            <i class="fa-solid fa-chart-line me-2 text-primary"></i>
-                            <span>درخواست‌ها: <b id="stat_total">0</b></span>
-                            <span class="mx-2">|</span>
-                            <span>مسدود شده: <b id="stat_blocked" class="text-danger">0</b></span>
+                    <div class="col-md-6 d-flex justify-content-md-end align-items-center gap-4">
+                        <div id="market_status_badge" class="px-4 py-2 rounded-pill bg-white border d-flex align-items-center gap-2">
+                            <span class="pulse-green"></span>
+                            <span class="small fw-bold text-success">بازار باز است</span>
                         </div>
-                        <div id="market_status_badge" class="badge bg-success-soft text-success px-3 py-2 rounded-pill border border-success">
-                            <i class="fa-solid fa-circle fa-fade me-1"></i> بازار: در حال فعالیت
-                        </div>
-                        <div class="text-end">
-                            <div class="fw-bold" id="current_time">--:--:--</div>
-                            <div class="small text-muted">امروز</div>
+                        <div class="text-end border-end pe-4">
+                            <div class="h3 fw-black mb-0 font-monospace" id="current_time">--:--:--</div>
+                            <div class="small text-secondary fw-bold">امروز</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Filters Card -->
-                <div class="card filter-card p-4">
+                <!-- Control Panel (Filters) -->
+                <div class="card filter-card mb-5">
                     <div class="row g-4 align-items-end">
                         <div class="col-lg-3">
-                            <label class="form-label"><i class="fa-solid fa-list-check me-1"></i> نوع خروجی تحلیل</label>
+                            <label class="form-label"><i class="fa-solid fa-sliders me-2 text-primary"></i> پیکربندی تحلیل</label>
                             <select id="analysis_type_select" class="form-select">
-                                <option value="technical">تحلیل تکنیکال پیشرفته</option>
-                                <option value="history">تاریخچه قیمتی</option>
-                                <option value="client_type">حقیقی-حقوقی</option>
+                                <option value="technical">تکنیکال کلاسیک و مدرن</option>
+                                <option value="history">بررسی تاریخچه قیمت</option>
+                                <option value="client_type">ترکیب خریداران و فروشندگان</option>
                             </select>
                         </div>
                         <div class="col-lg-4">
-                            <label class="form-label"><i class="fa-solid fa-calendar-days me-1"></i> بازه تاریخ (شمسی)</label>
+                            <label class="form-label"><i class="fa-solid fa-calendar me-2 text-primary"></i> بازه زمانی (شمسی)</label>
                             <div class="input-group">
-                                <input type="text" id="start_date" class="form-control text-center" placeholder="از تاریخ" data-jdp>
-                                <span class="input-group-text bg-white border-start-0 border-end-0"><i class="fa-solid fa-arrow-left-long"></i></span>
-                                <input type="text" id="end_date" class="form-control text-center" placeholder="تا تاریخ" data-jdp>
+                                <input type="text" id="start_date" class="form-control text-center bg-white" placeholder="از تاریخ" data-jdp>
+                                <span class="input-group-text border-0 bg-transparent"><i class="fa-solid fa-arrow-left"></i></span>
+                                <input type="text" id="end_date" class="form-control text-center bg-white" placeholder="تا تاریخ" data-jdp>
                             </div>
                         </div>
                         <div class="col-lg-2">
-                            <label class="form-label"><i class="fa-solid fa-hashtag me-1"></i> تعداد کندل</label>
+                            <label class="form-label"><i class="fa-solid fa-bars-staggered me-2 text-primary"></i> تعداد کندل</label>
                             <input type="number" id="candle_count" class="form-control text-center" value="100" min="1">
                         </div>
-                        <div id="codal_category_container" class="col-lg-3" style="display: none;">
-                            <label class="form-label">دسته‌بندی کدال</label>
-                            <select id="codal_category" class="form-select">
-                                <option value="">همه موارد</option>
-                                <option value="1">صورت‌های مالی</option>
-                                <option value="2">افشای اطلاعات بااهمیت</option>
-                                <option value="3">گزارش فعالیت ماهانه</option>
-                                <option value="4">اساسنامه و امیدنامه</option>
-                                <option value="5">هیئت مدیره و کمیته حسابرسی</option>
-                                <option value="6">آگهی دعوت به مجمع</option>
-                                <option value="7">تصمیمات مجمع</option>
-                                <option value="8">افزایش سرمایه</option>
-                                <option value="9">شفاف‌سازی</option>
-                                <option value="10">سایر اطلاعیه‌ها</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-3 d-flex flex-column gap-2 justify-content-end">
-                            <div class="d-flex gap-3 mb-1">
-                                <div class="form-check form-switch">
+                        <div class="col-lg-3">
+                            <div class="d-flex gap-3 mb-2 justify-content-center">
+                                <div class="form-check form-switch custom-switch">
                                     <input class="form-check-input" type="checkbox" id="adjusted_prices" checked>
-                                    <label class="form-check-label fw-bold" for="adjusted_prices">تعدیل</label>
+                                    <label class="form-check-label fw-bold" for="adjusted_prices">تعدیل قیمت</label>
                                 </div>
-                                <div class="form-check form-switch">
+                                <div class="form-check form-switch custom-switch">
                                     <input class="form-check-input" type="checkbox" id="force_refresh">
-                                    <label class="form-check-label fw-bold text-danger" for="force_refresh">بروزرسانی انلاین</label>
+                                    <label class="form-check-label fw-bold text-danger" for="force_refresh">بروزرسانی زنده</label>
                                 </div>
                             </div>
-                            <button id="btn_fetch" class="btn btn-primary w-100">
-                                <i class="fa-solid fa-bolt me-2"></i> شروع تحلیل هوشمند
+                            <button id="btn_fetch" class="btn btn-primary w-100 py-3">
+                                <i class="fa-solid fa-wand-magic-sparkles me-2"></i> اجرای عملیات تحلیل
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Loading State -->
-                <div id="loading" class="text-center">
-                    <div class="spinner-modern"></div>
-                    <h5 class="fw-bold text-primary">در حال پردازش درخواست...</h5>
-                    <p class="text-muted">لطفاً شکیبا باشید، داده‌ها در حال دریافت از سرور هستند.</p>
+                <!-- Interactive Analysis Stats Container -->
+                <div id="loading" class="text-center py-5">
+                    <div class="spinner-modern mx-auto mb-4"></div>
+                    <h3 class="fw-bold text-primary">هوش مصنوعی در حال پردازش...</h3>
+                    <p class="text-secondary">در حال دریافت و تحلیل دیتای بازار، لطفاً منتظر بمانید</p>
                 </div>
 
                 <!-- Results Section -->
                 <div id="result_container" style="display: none;">
                     <!-- Technical Summary Card -->
-                    <div id="tech_summary_container" class="card p-4 mb-4" style="display: none;">
-                        <div class="row g-3 align-items-center">
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">سیگنال هوشمند</div>
-                                <div id="summary_signal" class="h4 fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">الگوی شمعی</div>
-                                <div id="summary_pattern" class="h4 fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">شاخص RSI</div>
-                                <div id="summary_rsi" class="h4 fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center">
-                                <div class="small text-muted mb-1">روند (SMA)</div>
-                                <div id="summary_trend" class="h4 fw-bold mb-0">---</div>
+                    <div id="tech_summary_container" class="card p-0 mb-5 overflow-hidden border-0 shadow-lg" style="display: none;">
+                        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+                            <h4 class="fw-black mb-0 text-primary d-flex align-items-center">
+                                <i class="fa-solid fa-square-poll-vertical me-3 fs-3"></i> عصاره تحلیل تکنیکال <span class="ms-2 badge bg-primary-soft text-primary fs-6 fw-bold">Snapshot</span>
+                            </h4>
+                            <div class="text-secondary small fw-bold">
+                                <i class="fa-regular fa-clock me-1"></i> بروزرسانی: <span id="last_update_time">---</span>
                             </div>
                         </div>
-
-                        <!-- Support & Resistance Section -->
-                        <div class="row g-3 mt-3 border-top pt-3">
-                            <div class="col-md-6 border-start">
-                                <h6 class="fw-bold text-danger mb-2"><i class="fa-solid fa-arrow-up"></i> ۵ مقاومت پیش رو:</h6>
-                                <div id="summary_resistances" class="d-flex flex-wrap gap-2 small">---</div>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-arrow-down"></i> ۵ حمایت معتبر:</h6>
-                                <div id="summary_supports" class="d-flex flex-wrap gap-2 small">---</div>
-                            </div>
-                        </div>
-
-                        <!-- Advanced Analyst metrics (Ichimoku, Divergence, Fib, RR) -->
-                        <div class="row g-3 mt-4 border-top pt-4">
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">حمایت/مقاومت فیبوناتچی</div>
-                                <div id="summary_fib" class="small fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">وضعیت ایچیموکو</div>
-                                <div id="summary_ichimoku" class="small fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center border-start">
-                                <div class="small text-muted mb-1">واگرایی (Divergence)</div>
-                                <div id="summary_divergence" class="small fw-bold mb-0">---</div>
-                            </div>
-                            <div class="col-md-3 text-center">
-                                <div class="small text-muted mb-1">ضریب بتا (Beta)</div>
-                                <div id="summary_beta" class="small fw-bold mb-0">---</div>
-                            </div>
-                        </div>
-
-                        <!-- Trade Strategy Card -->
-                        <div class="row mt-4">
-                            <div class="col-12">
-                                <div class="p-3 bg-dark text-white rounded-4 shadow-sm border border-secondary">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 class="fw-bold mb-0"><i class="fa-solid fa-bullseye text-warning me-1"></i> استراتژی معاملاتی پیشنهادی (Risk to Reward)</h6>
-                                        <span id="summary_rr_ratio" class="badge bg-primary">R/R: ---</span>
+                        <div class="card-body p-4">
+                            <div class="row g-4 text-center">
+                                <div class="col-md-3">
+                                    <div class="p-4 rounded-4 bg-light border-0 h-100 transition-hover">
+                                        <div class="text-secondary small fw-bold mb-2 uppercase tracking-wider">سیگنال الگوریتم</div>
+                                        <div id="summary_signal" class="h4 fw-black mb-0">---</div>
                                     </div>
-                                    <div class="row text-center g-2 mt-2">
-                                        <div class="col-md-4">
-                                            <div class="p-2 border border-secondary rounded-3">
-                                                <div class="small text-secondary">نقطه ورود</div>
-                                                <div id="summary_entry" class="h6 fw-bold mb-0">---</div>
-                                            </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-4 rounded-4 bg-light border-0 h-100 transition-hover">
+                                        <div class="text-secondary small fw-bold mb-2 uppercase tracking-wider">الگوی کندل‌استیک</div>
+                                        <div id="summary_pattern" class="h4 fw-black mb-0 text-primary">---</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-4 rounded-4 bg-light border-0 h-100 transition-hover">
+                                        <div class="text-secondary small fw-bold mb-2 uppercase tracking-wider">شاخص قدرت (RSI)</div>
+                                        <div id="summary_rsi" class="h4 fw-black mb-0">---</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-4 rounded-4 bg-light border-0 h-100 transition-hover">
+                                        <div class="text-secondary small fw-bold mb-2 uppercase tracking-wider">وضعیت روند</div>
+                                        <div id="summary_trend" class="h4 fw-black mb-0">---</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Support & Resistance Section -->
+                            <div class="row g-4 mt-4">
+                                <div class="col-md-6">
+                                    <div class="p-4 rounded-4 border-start border-danger border-4 bg-danger-soft h-100">
+                                        <h6 class="fw-black text-danger mb-3 d-flex align-items-center">
+                                            <i class="fa-solid fa-arrow-trend-up me-2"></i> سطوح مقاومتی (Supply Zones)
+                                        </h6>
+                                        <div id="summary_resistances" class="d-flex flex-wrap gap-2">---</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-4 rounded-4 border-start border-success border-4 bg-success-soft h-100">
+                                        <h6 class="fw-black text-success mb-3 d-flex align-items-center">
+                                            <i class="fa-solid fa-arrow-trend-down me-2"></i> سطوح حمایتی (Demand Zones)
+                                        </h6>
+                                        <div id="summary_supports" class="d-flex flex-wrap gap-2">---</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Metrics -->
+                            <div class="row g-3 mt-4 text-center">
+                                <div class="col-md-3">
+                                    <div class="small text-secondary fw-bold">فیبوناتچی ۶۱.۸٪</div>
+                                    <div id="summary_fib" class="h6 fw-black mt-1">---</div>
+                                </div>
+                                <div class="col-md-3 border-start">
+                                    <div class="small text-secondary fw-bold"> ابر ایچیموکو</div>
+                                    <div id="summary_ichimoku" class="h6 fw-black mt-1">---</div>
+                                </div>
+                                <div class="col-md-3 border-start">
+                                    <div class="small text-secondary fw-bold">واگرایی (Divergence)</div>
+                                    <div id="summary_divergence" class="h6 fw-black mt-1">---</div>
+                                </div>
+                                <div class="col-md-3 border-start">
+                                    <div class="small text-secondary fw-bold">ضریب ریسک (Beta)</div>
+                                    <div id="summary_beta" class="h6 fw-black mt-1">---</div>
+                                </div>
+                            </div>
+
+                            <!-- Trade Strategy Card -->
+                            <div class="row mt-5">
+                                <div class="col-12">
+                                    <div class="p-4 rounded-4 shadow-lg border-0 bg-primary position-relative overflow-hidden" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
+                                        <!-- Decorative Circle -->
+                                        <div style="position: absolute; right: -50px; top: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center mb-4 position-relative">
+                                            <h5 class="fw-black text-white mb-0">
+                                                <i class="fa-solid fa-compass text-warning me-2"></i> استراتژی معاملاتی پیشنهادی
+                                            </h5>
+                                            <span id="summary_rr_ratio" class="badge bg-white text-primary px-3 py-2 rounded-pill fw-black">R/R Ratio: ---</span>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="p-2 border border-secondary rounded-3">
-                                                <div class="small text-secondary">حد ضرر (SL)</div>
-                                                <div id="summary_sl" class="h6 fw-bold text-danger mb-0">---</div>
+                                        <div class="row text-center g-3 position-relative">
+                                            <div class="col-md-4">
+                                                <div class="p-3 bg-white bg-opacity-10 rounded-4 border border-white border-opacity-10">
+                                                    <div class="text-white text-opacity-75 small fw-bold mb-1">نقطه ورود بهینه</div>
+                                                    <div id="summary_entry" class="h5 fw-black text-white mb-0">---</div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="p-2 border border-secondary rounded-3">
-                                                <div class="small text-secondary">حد سود (TP)</div>
-                                                <div id="summary_tp" class="h6 fw-bold text-success mb-0">---</div>
+                                            <div class="col-md-4">
+                                                <div class="p-3 bg-white bg-opacity-10 rounded-4 border border-white border-opacity-10">
+                                                    <div class="text-white text-opacity-75 small fw-bold mb-1">حد ضرر (Stop Loss)</div>
+                                                    <div id="summary_sl" class="h5 fw-black text-warning mb-0">---</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="p-3 bg-white bg-opacity-10 rounded-4 border border-white border-opacity-10">
+                                                    <div class="text-white text-opacity-75 small fw-bold mb-1">حد سود (Take Profit)</div>
+                                                    <div id="summary_tp" class="h5 fw-black text-info mb-0">---</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Smart AI-Like Analysis Text -->
-                        <div class="mt-4 bg-light p-3 rounded-4 border">
-                            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-robot me-1"></i> تحلیل هوشمند سیستم:</h6>
-                            <div id="smart_analysis_text" class="small text-muted" style="line-height: 1.8; text-align: justify;">
-                                در حال تحلیل داده‌ها...
+                            <!-- Smart AI-Like Analysis Text -->
+                            <div class="mt-4 p-4 rounded-4 border-0 style-ai-box" style="background: rgba(30, 58, 138, 0.04); border-right: 4px solid var(--primary-color) !important;">
+                                <h6 class="fw-black text-primary mb-3 d-flex align-items-center">
+                                    <i class="fa-solid fa-brain me-2 fa-beat"></i> استنتاج هوشمند سیستم:
+                                </h6>
+                                <div id="smart_analysis_text" class="text-secondary leading-relaxed text-justify small fw-medium" style="line-height: 2; font-size: 0.9rem;">
+                                    در حال تجمیع و تحلیل نهایی پارامترها...
+                                </div>
                             </div>
                         </div>
+                    </div>
 
                         <!-- ML Indicator Prioritization -->
-                        <div id="ml_prio_container" class="mt-4 border-top pt-4">
-                            <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-ranking-star text-warning me-1"></i> اولویت‌بندی هوشمند اندیکاتورها (Machine Learning):</h6>
+                        <div id="ml_prio_container" class="mt-5 p-4 rounded-4 bg-white shadow-sm border">
+                            <h6 class="fw-black text-primary mb-4 d-flex align-items-center">
+                                <i class="fa-solid fa-ranking-star text-warning me-2"></i> اولویت‌بندی هوشمند اندیکاتورها (Machine Learning)
+                            </h6>
                             <div class="row g-3" id="ml_ranking_list">
                                 <!-- Rankings will be injected here -->
                             </div>
-                            <div class="small text-muted mt-2 mt-2" style="font-size: 0.75rem;">
-                                * سیستم بر اساس رفتار تاریخی این سهم، اندیکاتورهایی که بیشترین دقت (Accuracy) را در پیش‌بینی حرکت قیمت داشته‌اند رتبه‌بندی کرده است.
+                            <div class="alert alert-info border-0 bg-info-soft mt-3 mb-0 py-2 px-3 d-flex align-items-center rounded-4">
+                                <i class="fa-solid fa-circle-question me-2"></i>
+                                <span class="small fw-bold">سیستم بر اساس رفتار تاریخی این سهم، اندیکاتورهایی که بیشترین دقت (Accuracy) را در پیش‌بینی حرکت قیمت داشته‌اند رتبه‌بندی کرده است.</span>
+                            </div>
+                        </div>
+
+                        <!-- 4D Strategy Matrix Table -->
+                        <div id="strategy_matrix_container" class="mt-5 p-4 rounded-4 bg-white shadow-sm border" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h6 class="fw-black text-primary mb-0 d-flex align-items-center">
+                                    <i class="fa-solid fa-shield-halved text-success me-2"></i> ماتریس استراتژی ۴ بعدی سرمایه‌گذاری
+                                </h6>
+                                <span class="badge bg-primary-soft text-primary px-3 py-2 rounded-pill fw-bold small">۱۲ پروفایل اختصاصی</span>
+                            </div>
+                            <div class="table-responsive rounded-4 border overflow-hidden">
+                                <table class="table table-hover align-middle text-center mb-0">
+                                    <thead class="bg-primary text-white">
+                                        <tr class="small fw-black text-white">
+                                            <th class="py-3">پروفایل سرمایه‌گذار</th>
+                                            <th class="py-3">تیپ شخصیتی</th>
+                                            <th class="py-3">افق زمانی</th>
+                                            <th class="py-3">نقطه ورود</th>
+                                            <th class="py-3">حد ضرر (SL)</th>
+                                            <th class="py-3">حد سود (TP)</th>
+                                            <th class="py-3" style="min-width: 250px;">توضیحات استراتژی</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="strategy_matrix_body" class="small fw-bold">
+                                        <!-- Matrix will be injected here -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -622,52 +856,36 @@
                         <!-- Individual indicator charts will be injected here -->
                     </div>
 
-                    <div class="card p-0 overflow-hidden">
-                        <div class="d-flex justify-content-between align-items-center p-4 bg-white border-bottom">
-                            <h4 id="result_title" class="fw-bold mb-0 text-primary">نتایج تحلیل</h4>
-                            <div class="d-flex gap-2">
-                                <button id="btn_copy" class="btn btn-outline-secondary btn-download">
-                                    <i class="fa-solid fa-copy"></i> کپی
+                    <div class="card p-0 overflow-hidden border-0 shadow-lg mb-5">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center p-4 bg-white border-bottom gap-3">
+                            <div>
+                                <h4 id="result_title" class="fw-black mb-1 text-primary">پایگاه داده تحلیل</h4>
+                                <p class="text-secondary small mb-0">نمایش جزئیات پارامترهای استخراج شده در بازه زمانی منتخب</p>
+                            </div>
+                            <div class="d-flex gap-3">
+                                <button id="btn_package" class="btn btn-package d-flex align-items-center gap-2">
+                                    <i class="fa-solid fa-cloud-arrow-down fs-5"></i> دریافت پکیج هوشمند تحلیل
                                 </button>
-                                <button id="btn_image" class="btn btn-warning btn-download text-white">
-                                    <i class="fa-solid fa-image"></i> دانلود عکس نمودار
-                                </button>
-                                <button id="btn_package" class="btn btn-primary btn-download">
-                                    <i class="fa-solid fa-file-zipper"></i> دانلود پکیج کامل (دیتا + نمودار)
-                                </button>
-                                <button id="btn_excel" class="btn btn-success btn-download">
-                                    <i class="fa-solid fa-file-excel"></i> Excel
-                                </button>
-                                <button id="btn_csv" class="btn btn-info btn-download text-white">
-                                    <i class="fa-solid fa-file-csv"></i> CSV
-                                </button>
-                                <button id="btn_pdf" class="btn btn-danger btn-download">
-                                    <i class="fa-solid fa-file-pdf"></i> PDF
-                                </button>
-                                <button id="btn_ai" class="btn btn-dark btn-download">
-                                    <i class="fa-solid fa-microchip"></i> بسته داده AI (JSON)
+                                <button id="btn_copy" class="btn btn-outline-secondary rounded-4 px-4">
+                                    <i class="fa-solid fa-copy"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Tabs for Daily/Weekly -->
-                        <div id="tech_tabs_container" class="px-4 pt-3 bg-light border-bottom d-flex justify-content-between align-items-center" style="display: none;">
-                            <ul class="nav nav-tabs border-0" id="techTabs" role="tablist">
+                        <!-- Tabs for Daily/Weekly with professional look -->
+                        <div id="tech_tabs_container" class="px-4 py-2 bg-white border-bottom d-flex justify-content-between align-items-center" style="display: none;">
+                            <ul class="nav nav-pills gap-2" id="techTabs" role="tablist">
                                 <li class="nav-item" role="presentation">
-                                    <button class="nav-link active fw-bold" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-pane" type="button" role="tab" onclick="switchTimeframe('daily')">تحلیل روزانه</button>
+                                    <button class="nav-link active fw-black px-4 py-2 rounded-pill transition-all" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily-pane" type="button" role="tab" onclick="switchTimeframe('daily')">روزانه (Daily)</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly-pane" type="button" role="tab" onclick="switchTimeframe('weekly')">تحلیل هفتگی</button>
+                                    <button class="nav-link fw-black px-4 py-2 rounded-pill transition-all" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly-pane" type="button" role="tab" onclick="switchTimeframe('weekly')">هفتگی (Weekly)</button>
                                 </li>
                             </ul>
-                            <div class="ms-auto pb-2">
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <input type="radio" class="btn-check" name="timeframe" id="tf_daily" value="daily" checked onchange="switchTimeframe('daily')">
-                                    <label class="btn btn-outline-primary" for="tf_daily">D</label>
-                                    
-                                    <input type="radio" class="btn-check" name="timeframe" id="tf_weekly" value="weekly" onchange="switchTimeframe('weekly')">
-                                    <label class="btn btn-outline-primary" for="tf_weekly">W</label>
-                                </div>
+                            <div class="ms-auto">
+                                <span class="badge bg-light text-secondary border px-3 py-2 rounded-pill fw-bold">
+                                    <i class="fa-solid fa-list-ol me-1"></i> تعداد رکورد: <span id="record_count" class="text-primary">---</span>
+                                </span>
                             </div>
                         </div>
 
@@ -794,21 +1012,26 @@
         // Utility: Jalali Date Formatter
         const jalaliFormatter = (val) => {
             if (!val) return '---';
-            const date = new Date(val);
-            if (isNaN(date.getTime())) return val;
-            return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            }).format(date);
+            
+            try {
+                const date = new Date(val);
+                if (isNaN(date.getTime())) return val;
+                
+                // Use a more robust check for Persian locale support
+                return new Intl.DateTimeFormat('fa-IR', {
+                    calendar: 'persian',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                }).format(date);
+            } catch (e) {
+                console.error("Jalali Formatter Error:", e);
+                return val;
+            }
         };
 
         function switchTimeframe(tf) {
             currentTimeframe = tf;
-            
-            // Sync radio buttons
-            const rb = document.getElementById(tf === 'weekly' ? 'tf_weekly' : 'tf_daily');
-            if (rb) rb.checked = true;
             
             // Sync tabs
             const tabId = tf === 'weekly' ? 'weekly-tab' : 'daily-tab';
@@ -821,10 +1044,44 @@
             // Update Summaries and Charts
             const dataToUse = tf === 'weekly' ? currentWeeklyData : currentData;
             if (dataToUse && dataToUse.length > 0) {
+                const countEl = document.getElementById('record_count');
+                if (countEl) countEl.textContent = dataToUse.length.toLocaleString();
+                
                 updateTechSummary(dataToUse);
                 renderCandlestickChart(dataToUse);
                 renderIndicatorCharts(dataToUse);
             }
+        }
+
+        function showToast(title, message, type = 'primary') {
+            const container = document.getElementById('toast-container') || createToastContainer();
+            const id = 'toast-' + Date.now();
+            const html = `
+                <div id="${id}" class="toast border-0 shadow-lg mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header bg-${type} text-white border-0">
+                        <i class="fa-solid fa-circle-info me-2"></i>
+                        <strong class="me-auto">${title}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body bg-white text-dark small fw-bold">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(id);
+            const toast = new bootstrap.Toast(el, { delay: 4000 });
+            toast.show();
+            el.addEventListener('hidden.bs.toast', () => el.remove());
+        }
+
+        function createToastContainer() {
+            const div = document.createElement('div');
+            div.id = 'toast-container';
+            div.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            div.style.zIndex = '1100';
+            document.body.appendChild(div);
+            return div;
         }
 
         // Tab switching listeners
@@ -836,11 +1093,20 @@
         function updateTechSummary(data) {
             if (!data || data.length === 0) return;
             
+            // Get the MOST RECENT record (index 0 because server returns descending)
             const latest = data[0];
+
+            const updateEl = document.getElementById('last_update_time');
+            if (updateEl) updateEl.textContent = new Date().toLocaleTimeString('fa-IR');
+
             const sigEl = document.getElementById('summary_signal');
             if (sigEl) {
-                sigEl.textContent = latest.Signal || 'Neutral';
-                sigEl.className = 'h4 fw-bold mb-0 ' + (latest.Signal?.includes('Bullish') ? 'text-success' : latest.Signal?.includes('Bearish') ? 'text-danger' : '');
+                const signalText = latest.Signal || 'خنثی';
+                sigEl.textContent = signalText;
+                let colorClass = 'text-secondary';
+                if (signalText.includes('Bullish') || signalText.includes('خرید')) colorClass = 'text-success';
+                else if (signalText.includes('Bearish') || signalText.includes('فروش')) colorClass = 'text-danger';
+                sigEl.className = 'h4 fw-black mb-0 ' + colorClass;
             }
             
             const patternEl = document.getElementById('summary_pattern');
@@ -888,7 +1154,19 @@
             // Risk/Reward
             if (latest.risk_reward) {
                 const rr = latest.risk_reward;
-                document.getElementById('summary_rr_ratio').textContent = `R/R: ${rr.ratio}`;
+                const rrBadge = document.getElementById('summary_rr_ratio');
+                rrBadge.textContent = `R/R: ${rr.rr_ratio}`;
+                
+                // Dynamic styling based on Risk/Reward Ratio
+                rrBadge.className = 'badge px-3 py-2 rounded-pill fw-black'; // Reset classes
+                if (rr.rr_ratio >= 2) {
+                    rrBadge.classList.add('bg-success', 'text-white');
+                } else if (rr.rr_ratio >= 1.5) {
+                    rrBadge.classList.add('bg-warning', 'text-dark');
+                } else {
+                    rrBadge.classList.add('bg-danger', 'text-white');
+                }
+
                 document.getElementById('summary_entry').textContent = rr.entry.toLocaleString();
                 document.getElementById('summary_sl').textContent = rr.stop_loss.toLocaleString();
                 document.getElementById('summary_tp').textContent = rr.take_profit.toLocaleString();
@@ -903,7 +1181,7 @@
             
             if (latest.divergence) analysis += `توجه: یک <b>${latest.divergence === 'Bullish Divergence' ? 'واگرایی مثبت' : 'واگرایی منفی'}</b> در اندیکاتور RSI مشاهده شد که نشانه بازگشت روند است. `;
 
-            if (latest.risk_reward && latest.risk_reward.ratio > 2) {
+            if (latest.risk_reward && latest.risk_reward.rr_ratio > 2) {
                 analysis += "با توجه به نسبت ریسک به ریوارد مناسب (بالای ۲)، ورود در این محدوده جذابیت فنی دارد. ";
             }
             
@@ -936,13 +1214,13 @@
             if (mlContainer && latest.recommended_indicators) {
                 mlContainer.innerHTML = latest.recommended_indicators.slice(0, 4).map((ind, idx) => `
                     <div class="col-md-3">
-                        <div class="p-3 border rounded-4 h-100 ${idx === 0 ? 'bg-primary-soft border-primary' : 'bg-white'}">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="badge ${idx === 0 ? 'bg-primary' : 'bg-secondary'}">رتبه ${idx + 1}</span>
-                                <span class="fw-bold text-primary">${ind.accuracy}% دقت</span>
+                        <div class="p-3 border rounded-4 h-100 ${idx === 0 ? 'bg-primary-soft border-primary border-2' : 'bg-white shadow-sm'} transition-hover shadow-hover">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge ${idx === 0 ? 'bg-primary' : 'bg-primary-soft text-primary'} px-2 py-1 rounded-pill small">#${idx + 1}</span>
+                                <span class="fw-black text-primary" style="font-size: 0.85rem;">${ind.accuracy}% دقت</span>
                             </div>
-                            <h6 class="fw-bold mb-1">${ind.name}</h6>
-                            <div class="text-muted" style="font-size: 0.75rem;">${ind.description}</div>
+                            <h6 class="fw-black mb-1 text-dark">${ind.name}</h6>
+                            <div class="text-secondary small fw-medium" style="font-size: 0.75rem; line-height: 1.4;">${ind.description}</div>
                         </div>
                     </div>
                 `).join('');
@@ -962,9 +1240,9 @@
         function updateServiceDesc() {
             const activeLink = document.querySelector('.nav-link.active[data-value]');
             if (activeLink) {
-                serviceDesc.textContent = activeLink.dataset.desc || '';
+                if (serviceDesc) serviceDesc.textContent = activeLink.dataset.desc || '';
                 activeService = activeLink.dataset.value;
-                codalCategoryContainer.style.display = (activeService === 'codal') ? 'block' : 'none';
+                if (codalCategoryContainer) codalCategoryContainer.style.display = (activeService === 'codal') ? 'block' : 'none';
                 
                 // Show timeframe only for technical analysis
                 const timeframeFields = document.querySelector('[name="timeframe"]')?.closest('.col-lg-3');
@@ -981,6 +1259,13 @@
                 const service = link.dataset.value;
                 serviceLinks.forEach(l => l.classList.remove('active'));
                 link.classList.add('active');
+                
+                // SYNC: Update the main dropdown
+                if (analysis_type_select) {
+                    analysis_type_select.value = service;
+                }
+                
+                activeService = service;
                 updateServiceDesc();
                 
                 // If switching to/from Codal, refresh symbol list to show/hide "All"
@@ -991,28 +1276,47 @@
                 if (service === 'technical' && !assetTypeSelect.value) {
                     alert('لطفاً ابتدا نوع بازار را انتخاب کنید.');
                 }
+                
+                // AUTO-FETCH: Trigger fetch if symbol is already selected
+                if (symbolSelect && symbolSelect.value) {
+                    btnFetch.click();
+                }
             });
         });
 
         updateServiceDesc();
 
         function populateSymbolSelect(symbols) {
+            if (!Array.isArray(symbols)) {
+                console.error("populateSymbolSelect expected array, got:", symbols);
+                symbols = [];
+            }
+            if (!symbolSelect) return;
             symbolSelect.innerHTML = '';
+            
+            const count = symbols.length;
             const defaultOpt = document.createElement('option');
             defaultOpt.value = '';
-            defaultOpt.textContent = symbols.length > 0 ? `انتخاب نماد (${symbols.length} مورد)...` : 'نمادی یافت نشد';
+            defaultOpt.textContent = count > 0 ? `انتخاب نماد (${count} مورد)...` : 'نمادی یافت نشد';
             symbolSelect.appendChild(defaultOpt);
 
             // Add "All" option for Indices or Codal
-            if (symbols.length > 0 && (assetTypeSelect.value.startsWith('indices') || activeService === 'codal')) {
+            if (count > 0 && assetTypeSelect && assetTypeSelect.value && (assetTypeSelect.value.startsWith('indices') || activeService === 'codal')) {
                 const allOpt = document.createElement('option');
                 allOpt.value = 'all';
                 allOpt.textContent = '--- همه موارد ---';
                 symbolSelect.appendChild(allOpt);
             }
 
+            // Sort symbols by ticker (l18)
+            const sortedSymbols = [...symbols].sort((a, b) => {
+                const aName = a.l18 || '';
+                const bName = b.l18 || '';
+                return aName.localeCompare(bName, 'fa');
+            });
+
             const fragment = document.createDocumentFragment();
-            symbols.forEach(s => {
+            sortedSymbols.forEach(s => {
                 const opt = document.createElement('option');
                 const val = s.l18 || s.id || s.isin || '';
                 opt.value = val;
@@ -1022,10 +1326,11 @@
             });
             symbolSelect.appendChild(fragment);
             symbolSelect.disabled = false;
+            if (symbolSearch) symbolSearch.disabled = false;
 
             // Better auto-selection logic
             if (symbols.length > 0) {
-                if (assetTypeSelect.value.includes('indices')) {
+                if (assetTypeSelect && assetTypeSelect.value.includes('indices')) {
                     // Indices usually use "all"
                     for (let i = 0; i < symbolSelect.options.length; i++) {
                         if (symbolSelect.options[i].value === 'all') {
@@ -1040,31 +1345,36 @@
             }
         }
 
-        symbolSearch.addEventListener('input', () => {
-            const term = normalizePersian(symbolSearch.value);
-            if (!term) { populateSymbolSelect(allSymbols); return; }
-            const filtered = allSymbols.filter(s => 
-                (s.l18 && normalizePersian(s.l18).includes(term)) || 
-                (s.l30 && normalizePersian(s.l30).includes(term)) ||
-                (s.isin && s.isin.toLowerCase().includes(term)) ||
-                (s.id && s.id.toString().includes(term))
-            );
-            populateSymbolSelect(filtered);
-        });
+        if (symbolSearch) {
+            symbolSearch.addEventListener('input', () => {
+                const term = normalizePersian(symbolSearch.value);
+                if (!term) { populateSymbolSelect(allSymbols); return; }
+                const filtered = allSymbols.filter(s => 
+                    (s.l18 && normalizePersian(s.l18).includes(term)) || 
+                    (s.l30 && normalizePersian(s.l30).includes(term)) ||
+                    (s.isin && s.isin.toLowerCase().includes(term)) ||
+                    (s.id && s.id.toString().includes(term))
+                );
+                populateSymbolSelect(filtered);
+            });
 
-        symbolSearch.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                if (symbolSelect.value) {
-                    btnFetch.click();
+            symbolSearch.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    if (symbolSelect && symbolSelect.value) {
+                        if (btnFetch) btnFetch.click();
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        const loadSymbols = async (refresh = false) => {
-            const val = assetTypeSelect.value;
+        const loadSymbols = async (refresh = false, manualVal = null) => {
+            const val = manualVal || (assetTypeSelect ? assetTypeSelect.value : null);
             if (!val) {
-                symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
-                symbolSelect.disabled = true;
+                if (symbolSelect) {
+                    symbolSelect.innerHTML = '<option value="">ابتدا بازار را انتخاب کنید</option>';
+                    symbolSelect.disabled = true;
+                }
+                if (symbolSearch) symbolSearch.disabled = true;
                 return;
             }
 
@@ -1075,11 +1385,15 @@
                 return;
             }
 
-            symbolSelect.innerHTML = `<option value="">در حال بارگذاری نمادها${refresh ? ' (بروزرسانی)' : ''}...</option>`;
-            symbolSelect.disabled = true;
-            symbolSearch.disabled = true;
-            btnFetch.disabled = true;
-            symbolSearch.value = '';
+            if (symbolSelect) {
+                symbolSelect.innerHTML = `<option value="">در حال بارگذاری نمادها${refresh ? ' (بروزرسانی)' : ''}...</option>`;
+                symbolSelect.disabled = true;
+            }
+            if (symbolSearch) {
+                symbolSearch.disabled = true;
+                symbolSearch.value = '';
+            }
+            if (btnFetch) btnFetch.disabled = true;
             // Don't clear allSymbols immediately to keep the UI stable if possible
 
             if (val.includes('indices')) {
@@ -1093,7 +1407,8 @@
                 });
                 const activeLink = document.querySelector('#analysis_list .nav-link.active');
                 if (activeLink && activeLink.classList.contains('disabled')) {
-                    document.querySelector('#analysis_list .nav-link[data-value="technical"]').click();
+                    const techLink = document.querySelector('#analysis_list .nav-link[data-value="technical"]');
+                    if (techLink) techLink.click();
                 }
             } else {
                 serviceLinks.forEach(link => link.classList.remove('disabled'));
@@ -1101,14 +1416,20 @@
             updateServiceDesc();
 
             try {
-                const response = await fetch(`/api/symbols/${val}${refresh ? '?refresh=true' : ''}`);
+                const url = `/api/symbols/${val}${refresh ? '?refresh=true' : ''}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`خطای سرور: ${response.status}`);
+                }
+
                 const symbols = await response.json();
-                if (symbols.error) {
-                    symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
+                if (symbols && symbols.error) {
+                    if (symbolSelect) symbolSelect.innerHTML = `<option value="">خطا: ${symbols.error}</option>`;
                     if (refresh) {
                         alert(`مشکل در بروزرسانی: ${symbols.error}`);
                     }
-                } else {
+                } else if (symbols) {
                     allSymbols = symbols;
                     symbolBrowserCache[val] = symbols; // Save to session cache
                     populateSymbolSelect(allSymbols);
@@ -1117,120 +1438,195 @@
                     }
                 }
             } catch (e) {
-                symbolSelect.innerHTML = `<option value="">خطا در ارتباط با سرور</option>`;
-                console.error(e);
+                if (symbolSelect) symbolSelect.innerHTML = `<option value="">خطا در ارتباط با سرور</option>`;
+                console.error("Load Symbols Error:", e);
             } finally {
-                btnFetch.disabled = false;
-                symbolSelect.disabled = false;
-                symbolSearch.disabled = false;
-                btnRefreshSymbols.innerHTML = '<i class="fa-solid fa-rotate"></i>';
-                btnRefreshSymbols.disabled = false;
+                if (btnFetch) btnFetch.disabled = false;
+                // symbolSelect and symbolSearch are enabled inside populateSymbolSelect if successful
+                // but we ensure they are enabled here if they were left disabled by an error
+                if (symbolSelect && symbolSelect.innerHTML.includes('خطا')) {
+                    symbolSelect.disabled = false;
+                    if (symbolSearch) symbolSearch.disabled = false;
+                }
+                if (btnRefreshSymbols) {
+                    btnRefreshSymbols.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+                    btnRefreshSymbols.disabled = false;
+                }
             }
         };
 
-        btnRefreshSymbols.addEventListener('click', () => loadSymbols(true));
-        assetTypeSelect.addEventListener('change', () => loadSymbols(false));
+        if (assetTypeSelect) {
+            assetTypeSelect.addEventListener('change', (e) => {
+                loadSymbols(false, e.target.value);
+                // UX: Auto-focus search after market selection
+                setTimeout(() => { if (symbolSearch) symbolSearch.focus(); }, 100);
+            });
+
+            // Initial load check for browser autocompleted values
+            if (assetTypeSelect.value) {
+                loadSymbols(false, assetTypeSelect.value);
+            }
+        }
+
+        if (btnRefreshSymbols) {
+            btnRefreshSymbols.addEventListener('click', () => {
+                btnRefreshSymbols.disabled = true;
+                btnRefreshSymbols.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                loadSymbols(true);
+            });
+        }
         
         document.getElementById('btn_add_watchlist')?.addEventListener('click', addToWatchlist);
 
-        btnFetch.addEventListener('click', async () => {
-            const assetType = assetTypeSelect.value;
-            const symbol = symbolSelect.value;
-            let serviceType = activeService;
-            const candleCount = document.getElementById('candle_count').value;
+        if (btnFetch) {
+            btnFetch.addEventListener('click', async () => {
+                const assetType = assetTypeSelect ? assetTypeSelect.value : null;
+                const symbol = symbolSelect ? symbolSelect.value : null;
+                let serviceType = activeService;
+                const candleCountEl = document.getElementById('candle_count');
+                const candleCount = candleCountEl ? candleCountEl.value : 200;
 
-            let startDate = document.getElementById('start_date').value;
-            let endDate = document.getElementById('end_date').value;
-            const adjusted = document.getElementById('adjusted_prices').checked;
-            const force_refresh = document.getElementById('force_refresh').checked;
+                let startDateEl = document.getElementById('start_date');
+                let startDate = startDateEl ? startDateEl.value : '';
+                let endDateEl = document.getElementById('end_date');
+                let endDate = endDateEl ? endDateEl.value : '';
+                
+                const adjustedEl = document.getElementById('adjusted_prices');
+                const adjusted = adjustedEl ? adjustedEl.checked : true;
+                const forceRefreshEl = document.getElementById('force_refresh');
+                const force_refresh = forceRefreshEl ? forceRefreshEl.checked : false;
 
-            if (startDate) startDate = startDate.replace(/\//g, '-');
-            if (endDate) endDate = endDate.replace(/\//g, '-');
+                if (startDate) startDate = startDate.replace(/\//g, '-');
+                if (endDate) endDate = endDate.replace(/\//g, '-');
 
-            if (!assetType) {
-                alert('لطفا ابتدا بازار را انتخاب کنید');
-                return;
-            }
-            if (!symbol) {
-                alert('لطفا یک نماد را انتخاب کنید یا جستجو نمایید');
-                return;
-            }
-
-            loading.style.display = 'block';
-            resultContainer.style.display = 'none';
-            btnFetch.disabled = true;
-            
-            // Clear previous data
-            currentData = [];
-            currentWeeklyData = [];
-
-            try {
-                if (serviceType === 'technical') {
-                    // Fetch both formats simultaneously for instant switching
-                    const [dailyRes, weeklyRes] = await Promise.all([
-                        fetch('/api/fetch_data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                asset_type: assetType, symbol, service_type: 'technical',
-                                start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'daily', candle_count: candleCount,
-                                refresh: force_refresh
-                            })
-                        }).then(r => r.json()),
-                        fetch('/api/fetch_data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                asset_type: assetType, symbol, service_type: 'technical',
-                                start_date: startDate, end_date: endDate, adjusted,
-                                timeframe: 'weekly', candle_count: candleCount,
-                                refresh: force_refresh
-                            })
-                        }).then(r => r.json())
-                    ]);
-
-                    if (dailyRes.error || weeklyRes.error) {
-                        alert('خطا: ' + (dailyRes.error || weeklyRes.error));
-                    } else {
-                        currentData = dailyRes;
-                        currentWeeklyData = weeklyRes;
-                        
-                        // Default to daily for the table render but respect current toggle for the view
-                        renderTable(currentData, currentWeeklyData);
-                        switchTimeframe(currentTimeframe);
-                    }
-                } else {
-                    const response = await fetch('/api/fetch_data', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            asset_type: assetType,
-                            symbol,
-                            service_type: serviceType,
-                            start_date: startDate,
-                            end_date: endDate,
-                            adjusted: adjusted,
-                            candle_count: candleCount,
-                            codal_category: codalCategorySelect.value,
-                            refresh: force_refresh
-                        })
-                    });
-                    currentData = await response.json();
-                    if (currentData.error) {
-                        alert('خطا: ' + currentData.error);
-                    } else {
-                        renderTable(currentData);
-                    }
+                if (!assetType) {
+                    alert('لطفا ابتدا بازار را انتخاب کنید');
+                    return;
                 }
-                updateMarketStatus();
-            } catch (e) {
-                alert('خطا در دریافت داده');
-            } finally {
-                loading.style.display = 'none';
-                btnFetch.disabled = false;
-            }
-        });
+                if (!symbol) {
+                    alert('لطفا یک نماد را انتخاب کنید یا جستجو نمایید');
+                    return;
+                }
+
+                if (loading) loading.style.display = 'block';
+                if (resultContainer) resultContainer.style.display = 'none';
+                btnFetch.disabled = true;
+                
+                // Clear previous data
+                currentData = [];
+                currentWeeklyData = [];
+
+                try {
+                    if (serviceType === 'technical') {
+                        // Fetch both formats simultaneously for instant switching
+                        const [dailyRes, weeklyRes] = await Promise.all([
+                            fetch('/api/fetch_data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    asset_type: assetType, symbol, service_type: 'technical',
+                                    start_date: startDate, end_date: endDate, adjusted,
+                                    timeframe: 'daily', candle_count: candleCount,
+                                    refresh: force_refresh
+                                })
+                            }).then(r => r.json()),
+                            fetch('/api/fetch_data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    asset_type: assetType, symbol, service_type: 'technical',
+                                    start_date: startDate, end_date: endDate, adjusted,
+                                    timeframe: 'weekly', candle_count: candleCount,
+                                    refresh: force_refresh
+                                })
+                            }).then(r => r.json())
+                        ]);
+
+                        if (dailyRes.error || weeklyRes.error) {
+                            alert('خطا: ' + (dailyRes.error || weeklyRes.error));
+                        } else {
+                            currentData = dailyRes;
+                            currentWeeklyData = weeklyRes;
+                            
+                            // Default to daily for the table render but respect current toggle for the view
+                            renderTable(currentData, currentWeeklyData);
+                            switchTimeframe(currentTimeframe);
+
+                            // Fetch Strategy Matrix independently
+                            fetch('/api/ai_package', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    symbol: symbol,
+                                    data: currentData,
+                                    weekly_data: currentWeeklyData
+                                })
+                            }).then(r => r.json()).then(res => {
+                                if (res.json && res.json.strategies) {
+                                    renderStrategyMatrix(res.json.strategies);
+                                }
+                            }).catch(e => console.error("Strategy Fetch Error:", e));
+                        }
+                    } else {
+                        const response = await fetch('/api/fetch_data', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                asset_type: assetType,
+                                symbol,
+                                service_type: serviceType,
+                                start_date: startDate,
+                                end_date: endDate,
+                                adjusted: adjusted,
+                                candle_count: candleCount,
+                                codal_category: codalCategorySelect ? codalCategorySelect.value : '',
+                                refresh: force_refresh
+                            })
+                        });
+                        currentData = await response.json();
+                        if (currentData.error) {
+                            alert('خطا: ' + currentData.error);
+                        } else {
+                            renderTable(currentData);
+                        }
+                    }
+                    if (typeof updateMarketStatus === 'function') updateMarketStatus();
+                } catch (e) {
+                    alert('خطا در دریافت داده');
+                } finally {
+                    if (loading) loading.style.display = 'none';
+                    btnFetch.disabled = false;
+                }
+            });
+        }
+
+        function renderStrategyMatrix(matrix) {
+            const body = document.getElementById('strategy_matrix_body');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            matrix.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = idx % 2 === 0 ? 'bg-light-soft' : 'bg-white';
+                
+                const getRiskColor = (p) => {
+                    if (p.includes('ریسک‌پذیر')) return 'text-danger';
+                    if (p.includes('ریسک‌گریز')) return 'text-success';
+                    return 'text-primary';
+                };
+
+                tr.innerHTML = `
+                    <td class="fw-black ${getRiskColor(row['پروفایل سرمایه‌گذار'])} text-end py-3">${row['پروفایل سرمایه‌گذار']}</td>
+                    <td class="text-secondary">${row['تیپ شخصیتی']}</td>
+                    <td class="text-secondary">${row['افق زمانی']}</td>
+                    <td class="text-primary fw-black">${typeof row['نقطه ورود'] === 'number' ? row['نقطه ورود'].toLocaleString() : row['نقطه ورود']}</td>
+                    <td class="text-danger fw-black">${typeof row['حد ضرر (SL)'] === 'number' ? row['حد ضرر (SL)'].toLocaleString() : row['حد ضرر (SL)']}</td>
+                    <td class="text-info fw-black">${typeof row['حد سود (TP)'] === 'number' ? row['حد سود (TP)'].toLocaleString() : row['حد سود (TP)']}</td>
+                    <td class="text-start small fw-medium px-3 text-secondary" style="max-width:350px; line-height: 1.6;">${row['توضیحات استراتژی']}</td>
+                `;
+                body.appendChild(tr);
+            });
+        }
 
         function renderTable(data, weeklyData = null) {
             if (!data || data.length === 0) { 
@@ -1250,12 +1646,14 @@
             const chartContainer = document.getElementById('chart_container');
             const indicatorChartsContainer = document.getElementById('indicator_charts_container');
             const techTabs = document.getElementById('tech_tabs_container');
+            const strategyContainer = document.getElementById('strategy_matrix_container');
             
             if (activeService === 'technical' && data.length > 0) {
                 techSummary.style.display = 'block';
                 chartContainer.style.display = 'block';
                 indicatorChartsContainer.style.display = 'flex';
                 techTabs.style.display = 'flex'; // Use flex for alignment
+                if (strategyContainer) strategyContainer.style.display = 'block';
                 
                 // switchTimeframe is called after renderTable in the click handler
             } else {
@@ -1263,6 +1661,7 @@
                 chartContainer.style.display = 'none';
                 indicatorChartsContainer.style.display = 'none';
                 techTabs.style.display = 'none';
+                if (strategyContainer) strategyContainer.style.display = 'none';
                 
                 if (activeService === 'client_type') {
                     renderClientTypeChart(data);
@@ -1287,7 +1686,11 @@
                 'ATR': 'ATR', 'STDDEV': 'StdDev', 'KC_Upper': 'Keltner', 'DC_Upper': 'Donchian',
                 'title': 'عنوان اطلاعیه', 'code': 'کد', 'date_publish': 'انتشار', 'link': 'لینک',
                 'link_pdf': 'PDF', 'link_excel': 'Excel', 'link_attachment': 'پیوست',
-                'Signal': 'سیگنال', 'Pattern': 'الگو'
+                'Signal': 'سیگنال', 'Pattern': 'الگو',
+                'ct_buy_real_vol': 'خرید حقیقی', 'ct_sell_real_vol': 'فروش حقیقی',
+                'ct_buy_legal_vol': 'خرید حقوقی', 'ct_sell_legal_vol': 'فروش حقوقی',
+                'ct_buy_real_count': 'تعداد خرید حقیقی', 'ct_sell_real_count': 'تعداد فروش حقیقی',
+                'p': 'قیمت', 'shareholder': 'نام سهامدار', 'per': 'درصد', 'share': 'تعداد سهام'
             };
 
             const fillTable = (targetData, headEl, bodyEl) => {
@@ -1352,12 +1755,18 @@
         }
 
         // --- Watchlist Logic ---
+        // Memory-based fallback for storage if localStorage is blocked by Tracking Prevention
+        const memoryStorage = {};
+
         function getStorageItem(key, defaultVal) {
             try {
-                return localStorage.getItem(key) || defaultVal;
+                // Try localStorage first
+                const val = localStorage.getItem(key);
+                return val !== null ? val : defaultVal;
             } catch (e) {
-                console.warn('Storage access blocked:', e);
-                return defaultVal;
+                // Fallback to memory if blocked
+                console.info('Storage access blocked by browser privacy settings. Using memory fallback.');
+                return memoryStorage[key] !== undefined ? memoryStorage[key] : defaultVal;
             }
         }
         
@@ -1365,7 +1774,8 @@
             try {
                 localStorage.setItem(key, val);
             } catch (e) {
-                console.warn('Storage access blocked:', e);
+                // Silently fallback to memory
+                memoryStorage[key] = val;
             }
         }
 
@@ -1427,11 +1837,9 @@
             const container = document.getElementById('main_chart');
             const volContainer = document.getElementById('volume_chart');
             
-            // Check if professional backend chart exists
+            // Prefer interactive ApexCharts over static image for better UX/Localization
             if (data[0] && data[0].chart_image) {
-                container.innerHTML = `<img src="data:image/png;base64,${data[0].chart_image}" class="img-fluid rounded-4 shadow-sm" style="width:100%">`;
-                volContainer.style.display = 'none';
-                return;
+                console.log("Static chart image available but skipping to use interactive ApexCharts.");
             }
             
             volContainer.style.display = 'block';
@@ -1474,7 +1882,7 @@
                 xaxis: { 
                     type: 'datetime', 
                     labels: { 
-                        formatter: jalaliFormatter,
+                        formatter: function(val) { return jalaliFormatter(val); },
                         style: { fontSize: '11px' },
                         hideOverlappingLabels: true,
                         rotate: -45,
@@ -1535,7 +1943,7 @@
                 xaxis: { 
                     type: 'datetime', 
                     labels: { 
-                        formatter: jalaliFormatter,
+                        formatter: function(val) { return jalaliFormatter(val); },
                         style: { fontSize: '11px' },
                         hideOverlappingLabels: true,
                         rotate: -45
@@ -1560,7 +1968,7 @@
                         distributed: false // Use individual colors from data
                     }
                 },
-                tooltip: { x: { formatter: jalaliFormatter } }
+                tooltip: { x: { formatter: function(val) { return jalaliFormatter(val); } } }
             };
 
             if (mainChart) mainChart.destroy();
@@ -1627,7 +2035,7 @@
                         type: 'datetime', 
                         labels: { 
                             show: true,
-                            formatter: jalaliFormatter,
+                            formatter: function(val) { return jalaliFormatter(val); },
                             style: { fontSize: '9px' }
                         } 
                     },
@@ -1663,7 +2071,7 @@
                 colors: ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b'],
                 xaxis: { 
                     type: 'datetime',
-                    labels: { formatter: jalaliFormatter }
+                    labels: { formatter: function(val) { return jalaliFormatter(val); } }
                 },
                 yaxis: { labels: { formatter: (val) => Math.abs(val).toLocaleString() } },
                 plotOptions: { bar: { horizontal: false, columnWidth: '80%' } },
@@ -1899,20 +2307,29 @@
         
         // Add Clock/Date Logic
         function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const dateStr = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            }).format(now);
-            
-            const timeEl = document.getElementById('current_time');
-            if (timeEl) {
-                timeEl.innerText = timeStr;
-                const dateEl = timeEl.nextElementSibling;
-                if (dateEl) dateEl.innerText = dateStr;
+            try {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                let dateStr = "امروز";
+                try {
+                    dateStr = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    }).format(now);
+                } catch(e) {
+                    dateStr = now.toLocaleDateString('fa-IR');
+                }
+                
+                const timeEl = document.getElementById('current_time');
+                if (timeEl) {
+                    timeEl.innerText = timeStr;
+                    const dateEl = timeEl.nextElementSibling;
+                    if (dateEl) dateEl.innerText = dateStr;
+                }
+            } catch (err) {
+                console.error("Clock update failed", err);
             }
         }
         setInterval(updateClock, 1000);
@@ -1924,78 +2341,20 @@
             return `TSETMC-${symbol}-${today}`;
         }
 
-        async function downloadFile(format) {
+        async function downloadPackage() {
             if (!currentData || currentData.length === 0) {
                 alert('ابتدا داده‌ها را دریافت کنید');
                 return;
             }
 
-            const btnId = format === 'excel' ? 'btn_excel' : (format === 'csv' ? 'btn_csv' : 'btn_image');
-            const btn = document.getElementById(btnId);
+            const btn = document.getElementById('btn_package');
             const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تحلیل و ساخت اسلایدها...';
             btn.disabled = true;
 
             try {
-                const filename = getFilename();
-                const response = await fetch('/api/download', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        daily_data: currentData, 
-                        weekly_data: currentWeeklyData,
-                        format: format, 
-                        filename: filename,
-                        symbol: symbolSelect.value
-                    })
-                });
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    let ext = '';
-                    if (format === 'excel') ext = 'xlsx';
-                    else if (format === 'image') ext = 'png';
-                    else ext = (currentWeeklyData && currentWeeklyData.length > 0 ? 'zip' : 'csv');
-                    
-                    saveAs(blob, `${filename}.${ext}`);
-                } else {
-                    const err = await response.text();
-                    alert('خطا در دانلود: ' + err);
-                }
-            } catch (e) {
-                console.error(e);
-                alert('خطا در ارتباط با سرور');
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        }
-
-        document.getElementById('btn_copy').addEventListener('click', () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const text = currentData.map(row => Object.values(row).join('\t')).join('\n');
-            navigator.clipboard.writeText(text).then(() => alert('داده‌ها در حافظه کپی شد'));
-        });
-
-        document.getElementById('btn_excel').addEventListener('click', () => downloadFile('excel'));
-        document.getElementById('btn_csv').addEventListener('click', () => downloadFile('csv'));
-        document.getElementById('btn_image').addEventListener('click', () => downloadFile('image'));
-
-        document.getElementById('btn_ai').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const btn = document.getElementById('btn_ai');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال بسته‌بندی...';
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/api/ai_package', {
+                // 1. Get AI Analysis Report
+                const aiResponse = await fetch('/api/ai_package', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -2004,213 +2363,181 @@
                         weekly_data: currentWeeklyData
                     })
                 });
-                const result = await response.json();
+                const aiResult = await aiResponse.json();
                 
-                if (result.json && result.markdown) {
-                    const zip = new JSZip();
-                    const folder = zip.folder("AI_Data_Package");
-                    
-                    // 1. JSON Data
-                    folder.file("data.json", JSON.stringify(result.json, null, 2));
-                    
-                    // 2. Markdown Report
-                    folder.file("report.md", result.markdown);
-                    
-                    // 3. CSV Data
-                    const sortedDaily = [...result.json.daily].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const wsDaily = XLSX.utils.json_to_sheet(sortedDaily);
-                    folder.file("daily_data.csv", "\ufeff" + XLSX.utils.sheet_to_csv(wsDaily));
-                    
-                    if (result.json.weekly && result.json.weekly.length > 0) {
-                        const sortedWeekly = [...result.json.weekly].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                        const wsWeekly = XLSX.utils.json_to_sheet(sortedWeekly);
-                        folder.file("weekly_data.csv", "\ufeff" + XLSX.utils.sheet_to_csv(wsWeekly));
-                    }
-
-                    // 4. Chart Image
-                    if (result.chart_image) {
-                        folder.file("technical_chart.png", result.chart_image, { base64: true });
-                    }
-
-                    const content = await zip.generateAsync({ type: "blob" });
-                    saveAs(content, `${result.filename}.zip`);
-                    
-                    alert('بسته جامع داده‌های AI (شامل JSON، CSV و گزارش Markdown) دانلود شد. این فایل ZIP را می‌توانید در ChatGPT یا Claude آپلود کنید.');
-                } else {
-                    alert('خطا در تولید بسته داده');
-                }
-            } catch (e) {
-                console.error(e);
-                alert('خطا در ارتباط با سرور');
-            } finally {
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        });
-
-        document.getElementById('btn_pdf').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const symbol = symbolSelect.value || 'Export';
-            
-            const btn = document.getElementById('btn_pdf');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید PDF...';
-
-            try {
-                const canvas = await html2canvas(document.getElementById('result_container'));
-                const imgData = canvas.toDataURL('image/png');
-                const imgProps = doc.getImageProperties(imgData);
-                const pdfWidth = doc.internal.pageSize.getWidth();
-                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                const filename = getFilename();
-                doc.save(`${filename}.pdf`);
-            } catch (e) {
-                console.error(e);
-                alert('خطا در تولید PDF');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
-        });
-
-        document.getElementById('btn_package').addEventListener('click', async () => {
-            if (!currentData || currentData.length === 0) {
-                alert('ابتدا داده‌ها را دریافت کنید');
-                return;
-            }
-
-            const btn = document.getElementById('btn_package');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> در حال تولید پکیج...';
-            btn.disabled = true;
-
-            try {
-                const zip = new JSZip();
-                const symbol = symbolSelect.value || 'Export';
-                const today = new Date().toISOString().split('T')[0];
+                // --- SLIDE MODAL INJECTION ---
+                const markdown = aiResult.markdown;
+                const slides = markdown.split('---').filter(s => s.includes('اسلاید'));
                 
-                // 1. Daily Data
-                const sortedDaily = [...currentData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                const wsDaily = XLSX.utils.json_to_sheet(sortedDaily);
-                const wbDaily = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wbDaily, wsDaily, "Daily");
-                const excelDaily = XLSX.write(wbDaily, { bookType: 'xlsx', type: 'array' });
-                zip.file(`${symbol}_Daily.xlsx`, excelDaily);
-                zip.file(`${symbol}_Daily.csv`, "\ufeff" + XLSX.utils.sheet_to_csv(wsDaily));
-
-                // 2. Weekly Data (if exists)
-                if (currentWeeklyData && currentWeeklyData.length > 0) {
-                    const sortedWeekly = [...currentWeeklyData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const wsWeekly = XLSX.utils.json_to_sheet(sortedWeekly);
-                    const wbWeekly = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wbWeekly, wsWeekly, "Weekly");
-                    const excelWeekly = XLSX.write(wbWeekly, { bookType: 'xlsx', type: 'array' });
-                    zip.file(`${symbol}_Weekly.xlsx`, excelWeekly);
-                    zip.file(`${symbol}_Weekly.csv`, "\ufeff" + XLSX.utils.sheet_to_csv(wsWeekly));
-                }
-
-                // 3. Charts
-                const chartsFolder = zip.folder("Charts");
-                
-                // Helper to render and capture
-                const captureChart = async (options, id) => {
-                    const el = document.getElementById(id);
-                    if (!el) {
-                        const newEl = document.createElement('div');
-                        newEl.id = id;
-                        newEl.style.position = 'absolute';
-                        newEl.style.left = '-9999px';
-                        document.body.appendChild(newEl);
-                    }
-                    const targetEl = document.getElementById(id);
-                    targetEl.innerHTML = '';
-                    const chart = new ApexCharts(targetEl, options);
-                    await chart.render();
-                    await new Promise(r => setTimeout(r, 1200)); // Wait for animations
-                    const result = await chart.dataURI();
-                    const uri = result.imgURI || result.dataUri || result;
-                    chart.destroy();
-                    if (typeof uri === 'string' && uri.includes(',')) {
-                        return uri.split(',')[1];
-                    }
-                    throw new Error(`خطا در تولید تصویر نمودار ${id}`);
+                // Show modal
+                const aiModal = new bootstrap.Modal(document.getElementById('aiModal'));
+                const renderMarkdown = (text) => {
+                    // Simple MD to HTML for the modal
+                    return text.replace(/### (.*)/g, '<h5 class="text-warning mt-3">$1</h5>')
+                               .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>')
+                               .replace(/`([^`]+)`/g, '<code class="bg-dark text-info p-1">$1</code>')
+                               .replace(/\|/g, '') // Hide table pipes for cleaner look or handle tables specifically
+                               .replace(/\n/g, '<br>');
                 };
 
-                const generateChartsForData = async (data, prefix) => {
-                    const sorted = [...data].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-                    const folder = chartsFolder.folder(prefix);
-                    
-                    const commonOptions = {
-                        chart: { 
-                            type: 'line', height: 600, width: 1000, 
-                            animations: { enabled: false }, background: '#fff', toolbar: { show: false }
-                        },
-                        xaxis: { 
-                            categories: sorted.map(d => d.date || d.time || ''),
-                            labels: { rotate: -45, style: { fontSize: '12px' } }
-                        },
-                        yaxis: { labels: { formatter: (val) => val ? val.toLocaleString() : val } },
-                        title: { align: 'center', style: { fontSize: '22px', fontWeight: 'bold' } },
-                        stroke: { width: 3, curve: 'smooth' }
-                    };
+                for(let i=0; i<7; i++) {
+                    const el = document.getElementById(`aiReportSlide${i+1}`);
+                    if(el && slides[i]) el.innerHTML = renderMarkdown(slides[i]);
+                }
+                aiModal.show();
+                // -----------------------------
 
-                    // Candlestick
-                    if (sorted[0].open && sorted[0].close) {
-                        const candleData = sorted.map(d => ({
-                            x: d.date || d.time,
-                            y: [d.open, d.high, d.low, d.close]
-                        }));
-                        const options = {
-                            ...commonOptions,
-                            chart: { ...commonOptions.chart, type: 'candlestick' },
-                            title: { ...commonOptions.title, text: `${symbol} (${prefix})` },
-                            series: [{ data: candleData }]
-                        };
-                        const img = await captureChart(options, 'chart_export_tmp');
-                        folder.file(`${symbol}_Candlestick.png`, img, { base64: true });
-                    }
-
-                    // Indicators
-                    const baseKeys = ['date', 'time', 'open', 'high', 'low', 'close', 'volume', 'l18', 'l30', 'isin', 'cs', 'cs_id', 'eps', 'pe', 'pc', 'pcc', 'pcp', 'pmin', 'pmax', 'count', 'Signal', 'Pattern'];
-                    const indicatorKeys = Object.keys(sorted[0]).filter(k => !baseKeys.includes(k) && typeof sorted[0][k] === 'number');
+                // 2. Request comprehensive ZIP for download
+                document.getElementById('downloadReportBtn').onclick = async () => {
+                    const response = await fetch('/api/download_comprehensive', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            symbol: symbolSelect.value,
+                            daily_data: currentData, 
+                            weekly_data: currentWeeklyData,
+                            markdown: aiResult.markdown
+                        })
+                    });
                     
-                    for (const key of indicatorKeys) {
-                        const options = {
-                            ...commonOptions,
-                            title: { ...commonOptions.title, text: `${key} (${prefix})` },
-                            series: [{ name: key, data: sorted.map(d => d[key]) }]
-                        };
-                        const img = await captureChart(options, 'chart_export_tmp');
-                        folder.file(`${key}.png`, img, { base64: true });
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        saveAs(blob, `ATAP_Pro_${symbolSelect.value}.zip`);
                     }
                 };
-
-                await generateChartsForData(currentData, "Daily");
-                if (currentWeeklyData && currentWeeklyData.length > 0) {
-                    await generateChartsForData(currentWeeklyData, "Weekly");
-                }
-
-                // 5. Finalize ZIP
-                const content = await zip.generateAsync({ type: "blob" });
-                saveAs(content, `Analysis_${symbol}_${today}.zip`);
-
+                
             } catch (e) {
                 console.error(e);
-                alert('خطا در تولید پکیج: ' + e.message);
+                alert('خطا در ارتباط با سرور جهت تولید بسته');
             } finally {
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
             }
-        });
+        }
+
+        document.getElementById('btn_package').addEventListener('click', downloadPackage);
     </script>
     <!-- Stats Modal -->
+    <!-- AI Report Modal (Professional 7-Slide Layout) -->
+    <div class="modal fade" id="aiModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content bg-dark text-light border-gold shadow-lg" style="border: 1px solid #d4af37 !important;">
+                <div class="modal-header border-bottom border-secondary py-2" style="background: #000;">
+                    <h5 class="modal-title d-flex align-items-center">
+                        <i class="fas fa-file-invoice-dollar text-warning me-2"></i>
+                        <span class="badge bg-warning text-dark p-2">گزارش تحلیلی ۷ اسلایدی ATAP Pro v4.0</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0 overflow-hidden" style="min-height: 80vh;">
+                    <div class="row g-0 h-100">
+                        <!-- Sidebar Navigation for Slides -->
+                        <div class="col-md-2 bg-black border-end border-secondary py-4" style="background: #050505;">
+                            <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist">
+                                <button class="nav-link active text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-1" type="button" style="border-radius:0;">
+                                    <i class="fas fa-id-card ms-2"></i> اسلاید ۱: شناسنامه
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-2" type="button" style="border-radius:0;">
+                                    <i class="fas fa-chart-line ms-2"></i> اسلاید ۲: روندها
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-3" type="button" style="border-radius:0;">
+                                    <i class="fas fa-wave-square ms-2"></i> اسلاید ۳: امواج
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-4" type="button" style="border-radius:0;">
+                                    <i class="fas fa-layer-group ms-2"></i> اسلاید ۴: سطوح
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-5" type="button" style="border-radius:0;">
+                                    <i class="fas fa-th ms-2"></i> اسلاید ۵: ماتریس
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-6" type="button" style="border-radius:0;">
+                                    <i class="fas fa-project-diagram ms-2"></i> اسلاید ۶: سناریوها
+                                </button>
+                                <button class="nav-link text-end mb-2 px-4 py-3 border-0" data-bs-toggle="pill" data-bs-target="#slide-7" type="button" style="border-radius:0;">
+                                    <i class="fas fa-check-double ms-2"></i> اسلاید ۷: جمع‌بندی
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Slide Content Area -->
+                        <div class="col-md-10 p-4 position-relative" style="background: #111; overflow-y: auto; max-height: 80vh;">
+                            <div class="tab-content" id="v-pills-tabContent">
+                                <div class="tab-pane fade show active" id="slide-1" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-id-card"></i> شناسنامه و وضعیت کلی بازار
+                                        </h3>
+                                        <div id="aiReportSlide1" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-2" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-chart-line"></i> تحلیل سه‌بعدی تایم‌فریم‌ها
+                                        </h3>
+                                        <div id="aiReportSlide2" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-3" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-wave-square"></i> تحلیل امواج و الگوها
+                                        </h3>
+                                        <div id="aiReportSlide3" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-4" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-layer-group"></i> سطوح قیمتی حیاتی و واکنش
+                                        </h3>
+                                        <div id="aiReportSlide4" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-5" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-th"></i> ماتریس عملیاتی ۶ پروفایل
+                                        </h3>
+                                        <div id="aiReportSlide5" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-6" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-project-diagram"></i> سناریوهای محتمل وزنی
+                                        </h3>
+                                        <div id="aiReportSlide6" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="slide-7" role="tabpanel">
+                                    <div class="p-4" style="background: #161616; border-radius: 15px; border: 1px solid #333;">
+                                        <h3 style="color: #d4af37; border-bottom: 2px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px;">
+                                            <i class="fas fa-check-double"></i> جمع‌بندی و توصیه نهایی
+                                        </h3>
+                                        <div id="aiReportSlide7" class="report-render-area"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary py-2 justify-content-between" style="background: #000;">
+                    <div class="branding text-muted small">
+                        Designed for <strong>Shakour Alishahi</strong> | ATAP Pro v4.0
+                    </div>
+                    <div class="actions">
+                        <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="window.print()">
+                            <i class="fas fa-print"></i> پرینت
+                        </button>
+                        <button id="downloadReportBtn" class="btn btn-warning btn-sm text-dark fw-bold">
+                            <i class="fas fa-download"></i> دانلود پکیج کامل (ZIP)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="statsModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
