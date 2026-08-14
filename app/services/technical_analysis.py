@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import ta  # type: ignore[attr-defined]
 import mplfinance as mpf
 import matplotlib
 matplotlib.use('Agg')
@@ -468,31 +467,46 @@ class TechnicalAnalyzer:
         try:
             # Trend & Momentum
             if len(df) >= 20:
-                df['SMA20'] = ta.trend.sma_indicator(df['close'], window=20)  # type: ignore[attr-defined]
-                df['BBU'] = ta.volatility.bollinger_hband(df['close'], window=20)  # type: ignore[attr-defined]
-                df['BBL'] = ta.volatility.bollinger_lband(df['close'], window=20)  # type: ignore[attr-defined]
+                df['SMA20'] = df['close'].rolling(window=20).mean()
+                df['BBU'] = df['close'].rolling(window=20).mean() + 2 * df['close'].rolling(window=20).std()
+                df['BBL'] = df['close'].rolling(window=20).mean() - 2 * df['close'].rolling(window=20).std()
             else:
                 df['SMA20'] = df['close'].rolling(window=min(len(df), 5)).mean()
                 df['BBU'] = None
                 df['BBL'] = None
 
             if len(df) >= 50:
-                df['SMA50'] = ta.trend.sma_indicator(df['close'], window=50)  # type: ignore[attr-defined]
+                df['SMA50'] = df['close'].rolling(window=50).mean()
             else:
                 df['SMA50'] = None
 
             if len(df) >= 26:
-                df['MACD'] = ta.trend.macd(df['close'])  # type: ignore[attr-defined]
-                df['MACD_Sig'] = ta.trend.macd_signal(df['close'])  # type: ignore[attr-defined]
+                ema_fast = df['close'].ewm(span=12, adjust=False).mean()
+                ema_slow = df['close'].ewm(span=26, adjust=False).mean()
+                df['MACD'] = ema_fast - ema_slow
+                df['MACD_Sig'] = df['MACD'].ewm(span=9, adjust=False).mean()
             else:
                 df['MACD'] = None
                 df['MACD_Sig'] = None
 
             if len(df) >= 14:
-                df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # type: ignore[attr-defined]
-                df['ADX'] = ta.trend.adx(df['high'], df['low'], df['close'])  # type: ignore[attr-defined]
-                df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)  # type: ignore[attr-defined]
-                df['STOCHk'] = ta.momentum.stoch(df['high'], df['low'], df['close'], window=14, smooth_window=3)  # type: ignore[attr-defined]
+                delta = df['close'].diff()
+                gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+                loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+                rs = gain / loss
+                df['RSI'] = 100 - (100 / (1 + rs))
+                
+                high = df['high']
+                low = df['low']
+                close = df['close']
+                tr1 = high - low
+                tr2 = abs(high - close.shift(1))
+                tr3 = abs(low - close.shift(1))
+                tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+                df['ATR'] = tr.rolling(window=14).mean()
+                
+                df['ADX'] = self._calculate_adx(df, 14)
+                df['STOCHk'] = self._calculate_stoch(df, 14, 3)
             else:
                 df['RSI'] = None
                 df['ADX'] = None
@@ -501,15 +515,48 @@ class TechnicalAnalyzer:
 
             # Ichimoku
             if len(df) >= 52:
-                df['Ichimoku_A'] = ta.trend.ichimoku_a(df['high'], df['low'])  # type: ignore[attr-defined]
-                df['Ichimoku_B'] = ta.trend.ichimoku_b(df['high'], df['low'])  # type: ignore[attr-defined]
-                df['Ichimoku_Base'] = ta.trend.ichimoku_base_line(df['high'], df['low'])  # type: ignore[attr-defined]
-                df['Ichimoku_Conv'] = ta.trend.ichimoku_conversion_line(df['high'], df['low'])  # type: ignore[attr-defined]
+                df = df.copy()
+                df = df.copy()
+                df['Ichimoku_A'] = (df['high'].rolling(window=26).max() + df['low'].rolling(window=26).min()) / 2
+                df['Ichimoku_B'] = (df['high'].rolling(window=52).max() + df['low'].rolling(window=52).min()) / 2
+                df['Ichimoku_Base'] = df['Ichimoku_A'].rolling(window=26).mean()
+                df['Ichimoku_Conv'] = (df['high'].rolling(window=9).max() + df['low'].rolling(window=9).min()) / 2
             else:
                 df['Ichimoku_A'] = None
                 df['Ichimoku_B'] = None
                 df['Ichimoku_Base'] = None
                 df['Ichimoku_Conv'] = None
+
+    @staticmethod
+    def _calculate_adx(data: pd.DataFrame, period: int) -> pd.Series:
+        """Calculate Average Directional Index (ADX)"""
+        high = data['high']
+        low = data['low']
+        close = data['close']
+        
+        plus_di = 100 * (high.diff()) / close.shift(1)
+        plus_di = plus_di.rolling(window=period).mean()
+        
+        minus_di = 100 * (low.diff().abs()) / close.shift(1)
+        minus_di = minus_di.rolling(window=period).mean()
+        
+        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)  # Avoid division by zero
+        adx = dx.rolling(window=period).mean()
+        return adx
+
+    @staticmethod
+    def _calculate_stoch(data: pd.DataFrame, period: int, smooth_window: int) -> pd.Series:
+        """Calculate Stochastic Oscillator K value"""
+        low = data['low']
+        high = data['high']
+        close = data['close']
+        
+        land = low.rolling(window=period).min()
+        haus = high.rolling(window=period).max()
+        
+        stoch_k = 100 * (close - land) / (haus - land + 1e-10)  # Avoid division by zero
+        stoch_k = stoch_k.rolling(window=smooth_window).mean()
+        return stoch_k
 
             # Beta calculation if index_data is provided
             beta_val = None
